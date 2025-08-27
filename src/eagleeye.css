@@ -1,0 +1,13 @@
+:root{
+    --ee-top: 220px;   /* headroom for top UI if needed */
+    --ee-footer: 110px;/* max footer height */
+    --ee-pad: 24px;    /* horizontal padding budget */
+    --ee-board: min(92vmin, calc(100vh - var(--ee-top) - var(--ee-footer) - 48px), calc(100vw - var(--ee-pad) - 48px));
+  }
+  .ee-wrap { --boardSide: var(--ee-board); }
+  .promptCard { animation: ee-float 8s ease-in-out infinite; }
+  @keyframes ee-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  .ee-answerBtns { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .ee-btnAnswer { height:64px; border-radius:14px; font-size:22px; font-weight:900; letter-spacing:.4px; border:2px solid #0f172a; background:#fff; color:#0f172a; box-shadow:0 4px 16px rgba(2,8,23,.06); }
+  .ee-btnAnswer:disabled { opacity:.45; cursor:not-allowed; }
+  

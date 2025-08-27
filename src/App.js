@@ -5,6 +5,7 @@ import MindMirage from './mindmirage';
 import GhostMoves from './ghostmoves';
 // import React, { useState } from "react";
 import './tailwind.css';
+import './core/theme/tokens.css'
 
 
 import React, { useMemo, useState, useEffect } from "react";

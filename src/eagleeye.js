@@ -1,279 +1,322 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import GameLayout from "./games/shared/GameLayout";
 
-function EagleEye() {
-  // ---- Configurable Themes ----
-  const THEMES = {
-    wooden: { light: "#EBD3B0", dark: "#AE6B36" },
-    green:  { light: "#e6f4ea", dark: "#0d7a5f" },
-    ice:    { light: "#eaf6ff", dark: "#2e5eaa" },
-    wb:     { light: "#ffffff", dark: "#000000" },
-  };
+/** Board themes */
+const THEMES = {
+  wooden: { light: "#EBD3B0", dark: "#AE6B36" },
+  green:  { light: "#e6f4ea", dark: "#0d7a5f" },
+  ice:    { light: "#eaf6ff", dark: "#2e5eaa" },
+  wb:     { light: "#ffffff", dark: "#000000" },
+};
 
-  // ---- Styles (self-contained) ----
-  const styles = `
-  :root {
-    /* Fill space between top controls and bottom bar, avoid horizontal scroll */
-    --boardSide: min(
-      92vmin,
-      calc(100vh - 260px - 100px - 64px),
-      calc(100vw - 120px)
-    );
-    --mesh: #d3d3d3;
-    --mesh-border: #000;
-    --good: rgba(16,185,129,0.9);
-    --bad: rgba(239,68,68,0.9);
-    --focus-dim: rgba(0,0,0,.4);
-    --focus-border: #0ea5e9;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: radial-gradient(1200px 600px at 50% -10%, #fff 30%, #f1f5f9); }
-  .app { min-height: 100vh; color: #0f172a; display: grid; grid-template-rows: auto 1fr; padding-bottom: 132px; overflow-x: hidden; }
-  .container { max-width: 1280px; margin: 0 auto; width: 100%; padding: 10px 18px; }
+const filesAll = ["a","b","c","d","e","f","g","h"];
+const ranksAll = [1,2,3,4,5,6,7,8];
+const fileToIndex = (f) => filesAll.indexOf(f);
+const rankToIndex = (r) => r - 1;
+const isLightSquare = (file, rank) => (fileToIndex(file) + rankToIndex(rank)) % 2 === 1; // a1 dark
 
-  .stage { display: grid; place-items: center; padding: 6px 14px; width: 100%; }
+/** Square board (Mode 1 only). It scales to container, no overflow. */
+function Board({
+  containerRef,
+  themeVars,
+  renderFullBoard,
+  n,
+  viewFiles,
+  viewRanks,
+  phase,
+  target,
+  lastResult,
+  restricted,
+  activeStart,
+  onSquareClick,
+  revealMode,
+}) {
+  const [boardPx, setBoardPx] = useState(320);
 
-  /* Panels */
-  .controls { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(260px, 1fr)); margin-top: 18px; }
-  @media (max-width: 920px) { .controls { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
-  @media (max-width: 620px) { .controls { grid-template-columns: 1fr; } }
-  .panel { background: rgba(255,255,255,.8); backdrop-filter: blur(8px); border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 30px rgba(2,8,23,.05); display: grid; gap: 12px; align-content: start; }
-  .panelTitle { font-size: 12px; font-weight: 900; letter-spacing: .8px; color: #334155; text-transform: uppercase; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .row.one { grid-template-columns: 1fr; }
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    const measure = () => {
+      const labelColW = 28, gap = 8, pad = 8;
+      const availableW = Math.max(220, el.clientWidth - labelColW - gap - pad);
+      const phone = window.innerWidth < 768;
+      const topAllowance = phone ? 220 : 160;
+      const bottomAllowance = phone ? 150 : 120;
+      const availableH = Math.max(240, window.innerHeight - topAllowance - bottomAllowance);
+      setBoardPx(Math.floor(Math.min(availableW, availableH)));
+      document.documentElement.style.overflowX = "hidden";
+      document.body.style.overflowX = "hidden";
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [containerRef]);
 
-  .btn { background: #059669; color: white; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.08); letter-spacing: .2px; }
-  .btn.secondary { background: #e2e8f0; color: #0f172a; font-weight: 600; }
-  .btn.destructive { background: #e11d48; }
-  .btn.round { width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; font-weight: 900; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  const rows = renderFullBoard ? 8 : n;
+  const cols = renderFullBoard ? 8 : n;
 
-  .field { display: grid; gap: 6px; }
-  .label { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .6px; }
-  .input, .select, .range { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none; background: white; }
-  .range { padding: 6px 0; }
+  const inRevealPatch = useCallback((rowIdx, colIdx) => {
+    if (!target) return false;
+    if (revealMode === "board") return true;
+    if (revealMode === "square") return rowIdx === target.r && colIdx === target.c;
+    if (revealMode === "2x2") {
+      const r0 = Math.min(target.r, rows - 1);
+      const c0 = Math.min(target.c, cols - 1);
+      const r1 = Math.min(r0 + 1, rows - 1);
+      const c1 = Math.min(c0 + 1, cols - 1);
+      return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
+    }
+    // 3x3
+    const r0 = Math.max(0, target.r - 1);
+    const c0 = Math.max(0, target.c - 1);
+    const r1 = Math.min(rows - 1, target.r + 1);
+    const c1 = Math.min(cols - 1, target.c + 1);
+    return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
+  }, [target, revealMode, rows, cols]);
 
-  /* Toggle Switch */
-  .toggle { 
-    display:flex; align-items:center; justify-content:space-between; gap: 12px;
-    padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
-  }
-  .tlabel { font-size: 14px; font-weight: 700; color:#0f172a; }
-  .switch { 
-    position: relative; width: 56px; height: 32px; border-radius: 9999px; 
-    background: #e2e8f0; cursor: pointer; transition: background .15s ease;
-  }
-  .switch[aria-checked="true"] { background: #059669; }
-  .switchHandle { 
-    position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; 
-    border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0,0,0,.2);
-    transition: transform .15s ease;
-  }
-  .switch[aria-checked="true"] .switchHandle { transform: translateX(24px); }
+  const inActiveRegionAbs = useCallback(
+    (fileIdx, rankIdx) =>
+      fileIdx >= activeStart.file &&
+      fileIdx < activeStart.file + n &&
+      rankIdx >= activeStart.rank &&
+      rankIdx < activeStart.rank + n,
+    [activeStart.file, activeStart.rank, n]
+  );
 
-  /* Number control for n */
-  .numCtrl { display:flex; align-items:center; gap:8px; }
-  .numBtn { width:40px; height:40px; border-radius:999px; border:none; cursor:pointer; background:#fff;
-    box-shadow:0 8px 14px rgba(2,8,23,.10), inset 0 0 0 2px rgba(15,23,42,.08); font-weight:900; }
-  .numVal { min-width:60px; text-align:center; font-weight:900; padding:6px 10px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; }
+  return (
+    <div className="w-full">
+      <div
+        className="grid gap-2 max-w-full"
+        style={{ gridTemplateColumns: "auto 1fr", gridTemplateRows: "1fr auto" }}
+      >
+        {/* left ranks */}
+        <div
+          className="flex flex-col justify-between pr-1 select-none text-zinc-900 dark:text-zinc-100"
+          style={{ gridColumn: 1, gridRow: 1 }}
+        >
+          {viewRanks.map((r) => (
+            <div
+              key={`rank-${r}`}
+              className="flex items-center justify-center font-black"
+              style={{ height: boardPx / rows, width: 24 }}
+              aria-hidden
+            >
+              {r}
+            </div>
+          ))}
+        </div>
 
-  /* Board (2 columns: [ranks][board]) */
-  .boardWrap {
-    display: grid;
-    grid-template-columns: auto auto;
-    grid-template-rows: auto auto auto;
-    gap: 10px;
-    padding: 12px 14px;
-    border-radius: 18px;
-    background: rgba(255,255,255,.85);
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 12px 40px rgba(2,8,23,.06);
-    align-items: center;
-    justify-items: center;
-    margin: 0 auto;
-    max-width: calc(var(--boardSide) + 70px);
-    width: max-content;
-  }
-  .ranksCol { grid-row: 2; display: grid; height: var(--boardSide); grid-template-rows: repeat(var(--rows), 1fr); padding: 8px 0; }
-  .ranksCol.left  { grid-column: 1; }
-  .filesRow { display: grid; width: var(--boardSide); padding: 8px; }
-  .filesRow.top    { grid-row: 1; grid-column: 2; padding-bottom: 0; }
-  .filesRow.bottom { grid-row: 3; grid-column: 2; padding-top: 0; grid-template-columns: repeat(var(--cols), 1fr); }
-  .rankLbl, .fileLbl { display: flex; align-items: center; justify-content: center; color: #0f172a; user-select: none; font-weight: 900; font-size: clamp(16px, 2.8vmin, 24px); letter-spacing: .3px; }
+        {/* square board */}
+        <div
+          className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden"
+          style={{ width: boardPx, height: boardPx, gridColumn: 2, gridRow: 1 }}
+        >
+          <div
+            className="w-full h-full grid"
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
+            role="grid"
+            aria-label="Training board"
+          >
+            {Array.from({ length: rows }).map((_, rowIdx) =>
+              Array.from({ length: cols }).map((__, colIdx) => {
+                const file = viewFiles[colIdx];
+                const rank = viewRanks[rowIdx];
+                const light = isLightSquare(file, rank);
+                 // absolute (0..7) indices for restrict math
+                const fileIdxAbs = fileToIndex(file);
+                const rankIdxAbs = rankToIndex(rank);
+                const inside = inActiveRegionAbs(fileIdxAbs, rankIdxAbs);
+                const isEdge =
+                restricted && inside && (
+                    fileIdxAbs === activeStart.file ||
+                    fileIdxAbs === activeStart.file + n - 1 ||
+                    rankIdxAbs === activeStart.rank ||
+                    rankIdxAbs === activeStart.rank + n - 1
+                );
 
-  .boardOuter { grid-row: 2; grid-column: 2; background: #e2e8f0; padding: 8px; border-radius: 16px; width: var(--boardSide); height: var(--boardSide); }
-  .board { display: grid; grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), 1fr); border-radius: 12px; overflow: hidden; background: white; width: 100%; height: 100%; }
-  .square { position: relative; display: flex; align-items: center; justify-content: center; transition: box-shadow .15s ease, background-color .15s ease, transform .08s ease; font-size: 20px; line-height: 1; user-select: none; }
-  .square.targetMesh { transform: scale(1.02); }
-  .square.dim::after { content: ""; position: absolute; inset: 0; background: var(--focus-dim); }
-  .square.focusEdge { outline: 2px solid #0ea5e9; outline-offset: -2px; }
-  .coordCenter { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #0b1220; font-size: calc( (var(--boardSide) / var(--rows)) * 0.6 ); letter-spacing: .6px; text-shadow: 0 2px 0 rgba(255,255,255,.7), 0 0 10px rgba(255,255,255,.4); }
-  .shadowGood { box-shadow: 0 0 0 5px var(--good) inset, 0 0 0 4px var(--good); }
-  .shadowBad  { box-shadow: 0 0 0 5px var(--bad)  inset, 0 0 0 4px var(--bad); }
+                // backgrounds by phase
+                let bg;
+                if (phase === "idle") {
+                  bg = light ? themeVars.light : themeVars.dark;
+                } else if (phase === "mesh") {
+                  const isTargetNow = target && target.r === rowIdx && target.c === colIdx;
+                  bg = isTargetNow ? "#9ca3af" : "#d3d3d3";
+                } else {
+                  const show = inRevealPatch(rowIdx, colIdx);
+                  bg = show ? (light ? themeVars.light : themeVars.dark) : "#d3d3d3";
+                }
 
-  /* PROMPT-ONLY (Mode 2) — big centered card with glow */
-  .promptZone { width: 100%; display: grid; place-items: center; }
-  .promptCard {
-    width: min(900px, 96vw);
-    min-height: clamp(220px, 34vmin, 420px);
-    border-radius: 24px;
-    background:
-      radial-gradient(120% 120% at 20% -10%, rgba(255,255,255,.95), rgba(255,255,255,.88)),
-      linear-gradient(135deg, rgba(14,165,233,.12), rgba(16,185,129,.12));
-    border: 1px solid rgba(226,232,240,.9);
-    box-shadow:
-      0 20px 60px rgba(2,8,23,.12),
-      inset 0 0 0 1px rgba(255,255,255,.6);
-    padding: clamp(18px, 3vmin, 32px);
-    display: grid;
-    gap: 10px;
-    place-items: center;
-    text-align: center;
-    animation: float 8s ease-in-out infinite;
-  }
-  @keyframes float {
-    0%,100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
-  }
-  .promptCoord {
-    font-weight: 900;
-    letter-spacing: .6px;
-    font-size: clamp(56px, 16vmin, 148px);
-    color: #0b1220;
-    text-shadow: 0 2px 0 rgba(255,255,255,.7), 0 0 18px rgba(14,165,233,.25);
-    line-height: 1;
-  }
-  .promptHint {
-    margin-top: 4px;
-    font-weight: 700;
-    font-size: clamp(13px, 2.2vmin, 16px);
-    color: #475569;
-  }
-  .promptBadge {
-    display:inline-flex; align-items:center; gap:8px;
-    padding: 6px 10px; border-radius: 999px;
-    background: rgba(14,165,233,.14);
-    color: #0b5394; font-weight: 800; font-size: 12px; letter-spacing:.4px;
-    border: 1px solid rgba(14,165,233,.25);
-  }
+                // 1px grid (all four sides; prevent double-thick by only right/bottom at edges)
+                const cellBorder =
+                  `border-l border-t ${colIdx === cols - 1 ? "border-r " : ""}${rowIdx === rows - 1 ? "border-b " : ""}` +
+                  "border-zinc-300 dark:border-zinc-700";
 
-  /* Bottom Answer Bar */
-  .answerBar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: rgba(255,255,255,.9); backdrop-filter: blur(10px); border-top: 1px solid #e2e8f0; box-shadow: 0 -12px 30px rgba(2,8,23,.08); }
-  .answerWrap { max-width: 1180px; margin: 0 auto; padding: 14px 18px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
-  .answerBtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .btnAnswer { height: 64px; border-radius: 14px; font-size: 22px; font-weight: 900; letter-spacing: .4px; border: 2px solid #0f172a; background: white; color: #0f172a; cursor: pointer; box-shadow: 0 4px 16px rgba(2,8,23,.06); }
-  .btnAnswer:disabled { opacity: .45; cursor: not-allowed; }
+                // THICK 4-side outline on target during reveal
+                const isTargetNow = target && target.r === rowIdx && target.c === colIdx;
+                const thickOutline =
+                  phase === "reveal" && isTargetNow
+                    ? (lastResult === "correct"
+                        ? "0 0 0 6px rgba(16,185,129,.95)"  // emerald-500
+                        : "0 0 0 6px rgba(244,63,94,.95)")  // rose-500
+                    : "none";
 
-  .actionsPanel { display: grid; gap: 14px; align-items: center; justify-items: center; }
-  .statGrid { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 12px; width: 100%; }
-  .statCard { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: 0 1px 2px rgba(2,8,23,.03); }
-  .statLabel { font-size: 11px; font-weight: 800; letter-spacing: .5px; color: #64748b; text-transform: uppercase; }
-  .statValue { font-size: 22px; font-weight: 900; color: #0f172a; }
-  `;
+                return (
+                  <div
+                    key={`${file}${rank}`}
+                    className={`relative transition-transform ${cellBorder}`}
+                    style={{ background: bg, boxShadow: thickOutline }}
+                    role="gridcell"
+                    aria-label={`${file}${rank}`}
+                    onClick={() => onSquareClick(rowIdx, colIdx)}
+                  >
+                    {/* coordinate in Mode 1 during mesh */}
+                    {isTargetNow && phase === "mesh" && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span
+                          className="font-black"
+                          style={{
+                            color: "#111827", // ensure visible on grey
+                            fontSize: "min(8vw, 32px)",
+                            textShadow: "0 2px 2px rgba(255,255,255,.5)",
+                          }}
+                        >
+                          {file}{rank}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Dim everything outside restricted region */}
+                    {restricted && !inside && (
+                      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+                    )}
 
-  // ---- State ----
+                    {/* Draw a clear ring around the active n×n region */}
+                    {isEdge && (
+                      <div className="absolute inset-0 pointer-events-none ring-2 ring-sky-500" />
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* bottom files */}
+        <div
+          className="flex gap-0 select-none text-zinc-900 dark:text-zinc-100"
+          style={{ gridColumn: "1 / span 2", gridRow: 2, width: boardPx + 24 }}
+        >
+          <div style={{ width: 24 }} aria-hidden />
+          <div className="grid w-full" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+            {viewFiles.map((f) => (
+              <div
+                key={`file-${f}`}
+                className="flex items-center justify-center font-black"
+                style={{ height: 24 }}
+                aria-hidden
+              >
+                {f}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Prompt-only stage (Mode 2). Keeps a constant square area across phases. */
+function PromptStage({ phase, lastResult, target, viewFiles, viewRanks }) {
+  return (
+    <div className="w-full flex justify-center items-center">
+      {/* outer frame matches board max-width and enforces square area */}
+      <div
+        className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden grid place-items-center"
+        style={{ width: "min(90vmin, 600px)", aspectRatio: "1 / 1" }}
+      >
+        <div className="w-full max-w-sm px-4">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm">
+            <div className="text-center text-zinc-900 dark:text-zinc-100">
+              {phase === "mesh" && (
+                <>
+                  <div className="text-4xl font-black tracking-tight">
+                    {target ? `${viewFiles[target.c]}${viewRanks[target.r]}` : "e4"}
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    Press <span className="px-2 py-0.5 rounded-full border text-xs">L ← / D →</span> or use the buttons.
+                  </div>
+                </>
+              )}
+              {phase === "reveal" && (
+                <div
+                  className="text-sm font-semibold"
+                  style={{ color: lastResult === "correct" ? "#10b981" : "#f43f5e" }}
+                >
+                  {lastResult === "correct" ? "Correct" : "Wrong"}
+                </div>
+              )}
+              {phase === "idle" && (
+                <>
+                  <div className="text-3xl font-black tracking-tight">Ready?</div>
+                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    Press <span className="px-2 py-0.5 rounded-full border text-xs">Start</span> to begin.
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function EagleEye() {
+  // ===== State =====
   const [theme, setTheme] = useState("wooden");
-  const [mode, setMode] = useState(2); // you can change default to 1 if you prefer
+  const themeVars = THEMES[theme] || THEMES.green;
 
+  const [mode, setMode] = useState(1); // 1 = board, 2 = prompt-only
   const [revealMode, setRevealMode] = useState("board"); // square | 2x2 | 3x3 | board
-  const [revealMs, setRevealMs] = useState(900);
+  const [revealMs, setRevealMs] = useState(300);
   const [repeatIncorrect, setRepeatIncorrect] = useState(true);
-  const [timerEnabled, setTimerEnabled] = useState(true);
-  const [duration, setDuration] = useState(100);
-  const [timeLeft, setTimeLeft] = useState(100);
+  const [openSheet, setOpenSheet] = useState(false);
+
+  const [duration, setDuration] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
-  const [phase, setPhase] = useState("idle"); // idle | mesh | reveal
-  const [target, setTarget] = useState(null); // {r, c}
-  const [lastResult, setLastResult] = useState(null); // "correct" | "incorrect" | null
+  const [phase, setPhase] = useState("idle");
+  const [target, setTarget] = useState(null);
+  const [lastResult, setLastResult] = useState(null);
   const [score, setScore] = useState(0);
 
-  // board size & restricted sub-board
-  const [boardSize, setBoardSize] = useState(8); // n (3..8)
+  const [boardSize, setBoardSize] = useState(8);
   const [restricted, setRestricted] = useState(false);
   const [anchor, setAnchor] = useState({ file: 0, rank: 0 });
 
-  // Audio
-  const [volume] = useState(0.75);
-  const timerRef = useRef(null);
-  const audioCtxRef = useRef(null);
-
-  // Orientation (fixed to white for simplicity here)
-  const filesAll = ["a","b","c","d","e","f","g","h"];
-  const ranksAll = [1,2,3,4,5,6,7,8];
-  const filesLeftToRight = filesAll;
-  const ranksTopToBottom = [8,7,6,5,4,3,2,1];
-
-  // ACTIVE RANGE
   const activeStart = restricted ? anchor : { file: 0, rank: 0 };
-  const n = Math.min(Math.max(boardSize, 1), 8);
-
-  // Render full board when restricted or n===8; else render n×n
+  const n = Math.min(Math.max(boardSize, 3), 8);
   const renderFullBoard = restricted || n === 8;
 
   const viewFiles = useMemo(() => {
-    if (renderFullBoard) return filesLeftToRight; // 8
-    const slice = filesAll.slice(activeStart.file, activeStart.file + n);
-    return slice;
-  }, [renderFullBoard, filesLeftToRight, activeStart.file, n]);
+    if (renderFullBoard) return filesAll;
+    return filesAll.slice(activeStart.file, activeStart.file + n);
+  }, [renderFullBoard, activeStart.file, n]);
 
   const viewRanks = useMemo(() => {
-    if (renderFullBoard) return ranksTopToBottom; // 8
+    if (renderFullBoard) return [...ranksAll].reverse();
     const slice = ranksAll.slice(activeStart.rank, activeStart.rank + n);
     return [...slice].reverse();
-  }, [renderFullBoard, ranksTopToBottom, activeStart.rank, n]);
+  }, [renderFullBoard, activeStart.rank, n]);
 
-  function fileToIndex(fileLetter) { return filesAll.indexOf(fileLetter); }
-  function rankToIndex(rankNum) { return rankNum - 1; }
-
-  function coordAtViewCell(rowIdx, colIdx) {
-    const rank = viewRanks[rowIdx];
-    const file = viewFiles[colIdx];
-    return file + String(rank);
-  }
-
-  // a1 is dark; light if (fileIndex + rankIndex) % 2 === 1
-  function isLightSquare(fileLetter, rankNum) {
-    const fileIndex = fileToIndex(fileLetter);
-    const rankIndex = rankToIndex(rankNum);
-    return (fileIndex + rankIndex) % 2 === 1;
-  }
-
-  function validAnchor(fIdx, rIdx) { return fIdx >= 0 && rIdx >= 0 && fIdx <= 8 - n && rIdx <= 8 - n; }
-
-  function inActiveRegionAbs(fileIdx, rankIdx) {
-    return (
-      fileIdx >= activeStart.file && fileIdx < activeStart.file + n &&
-      rankIdx >= activeStart.rank && rankIdx < activeStart.rank + n
-    );
-  }
-
-  // ---- Target picking ----
-  function pickRandomTarget() {
-    if (renderFullBoard) {
-      const f = activeStart.file + Math.floor(Math.random() * n);
-      const r = activeStart.rank + Math.floor(Math.random() * n);
-      const fileLetter = filesAll[f];
-      const rankNum = r + 1;
-      const col = viewFiles.indexOf(fileLetter);
-      const row = viewRanks.indexOf(rankNum);
-      setTarget({ r: row, c: col });
-    } else {
-      setTarget({ r: Math.floor(Math.random() * n), c: Math.floor(Math.random() * n) });
-    }
-  }
-
-  // For Mode 2 (prompt card)
-  const targetCoord = target ? coordAtViewCell(target.r, target.c) : null;
-
-  // ---- Timer ----
+  // Timer (counts down while running)
+  const timerRef = useRef(null);
   useEffect(() => {
-    if (!isRunning || !timerEnabled) return;
+    if (!isRunning) return;
     setTimeLeft(duration);
-
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -288,26 +331,40 @@ function EagleEye() {
         return t - 1;
       });
     }, 1000);
-
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [isRunning, duration, timerEnabled]);
+  }, [isRunning, duration]);
 
-  // ---- Start/Stop (restored) ----
-  function startGame() {
+  // Target picking
+  const pickRandomTarget = useCallback(() => {
+    if (renderFullBoard) {
+      const f = activeStart.file + Math.floor(Math.random() * n);
+      const r = activeStart.rank + Math.floor(Math.random() * n);
+      const fileLetter = filesAll[f];
+      const rankNum = r + 1;
+      const col = viewFiles.indexOf(fileLetter);
+      const row = viewRanks.indexOf(rankNum);
+      setTarget({ r: row, c: col });
+    } else {
+      setTarget({ r: Math.floor(Math.random() * n), c: Math.floor(Math.random() * n) });
+    }
+  }, [renderFullBoard, activeStart.file, activeStart.rank, n, viewFiles, viewRanks]);
+
+  const startGame = useCallback(() => {
     setScore(0);
     setLastResult(null);
     setIsRunning(true);
     setPhase("mesh");
-    if (timerEnabled) setTimeLeft(duration);
+    setTimeLeft(duration);
     pickRandomTarget();
-  }
+    setOpenSheet(false);
+  }, [duration, pickRandomTarget]);
 
-  function stopGame() {
+  const stopGame = useCallback(() => {
     setIsRunning(false);
     setPhase("idle");
     setTarget(null);
@@ -316,61 +373,69 @@ function EagleEye() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }
+  }, []);
 
-  // Reset target when settings change while running
   useEffect(() => {
     if (isRunning) pickRandomTarget();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restricted, boardSize, anchor.file, anchor.rank]);
 
-  // ---- Audio ----
+  // Keyboard shortcuts: L/← = light, D/→ = dark. Space toggles start/stop.
+  const isTypingInEditable = (el) => {
+    if (!el) return false;
+    const tag = el.tagName;
+    return el.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  };
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (isTypingInEditable(e.target)) return;
+      const k = e.key.toLowerCase();
+
+      if (k === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        isRunning ? stopGame() : startGame();
+        return;
+      }
+
+      const canAnswer = isRunning && phase === "mesh" && target;
+      if (canAnswer && (k === "l" || e.key === "ArrowLeft")) { e.preventDefault(); submitAnswer("light"); return; }
+      if (canAnswer && (k === "d" || e.key === "ArrowRight")) { e.preventDefault(); submitAnswer("dark"); return; }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isRunning, phase, target, startGame, stopGame]); // deps include handlers/state used
+
+  // Answers + audio
+  const audioCtxRef = useRef(null);
+  const volume = 0.75;
   function ensureAudio() {
     if (!audioCtxRef.current) {
       const AC = window.AudioContext || window.webkitAudioContext;
       audioCtxRef.current = new AC();
     }
-    if (audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume();
-    }
+    if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
   }
-
   function tone(freq = 440, when = 0, dur = 0.12, type = "sine", gainBase = 0.08) {
     const ctx = audioCtxRef.current;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    osc.connect(g);
-    g.connect(ctx.destination);
-    const t0 = ctx.currentTime + when;
-    const t1 = t0 + dur;
+    osc.type = type; osc.frequency.value = freq; osc.connect(g); g.connect(ctx.destination);
+    const t0 = ctx.currentTime + when; const t1 = t0 + dur;
     const gval = Math.max(0.0001, gainBase * Math.min(1, Math.max(0, volume)));
-    g.gain.setValueAtTime(gval, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t1);
-    osc.start(t0);
-    osc.stop(t1 + 0.01);
+    g.gain.setValueAtTime(gval, t0); g.gain.exponentialRampToValueAtTime(0.0001, t1);
+    osc.start(t0); osc.stop(t1 + 0.01);
   }
-
   function playFeedback(correct) {
     ensureAudio();
     const base = 0;
-    if (correct) {
-      tone(660, base + 0.00, 0.10, "sine", 0.08);
-      tone(880, base + 0.10, 0.12, "sine", 0.08);
-    } else {
-      tone(220, base + 0.00, 0.10, "square", 0.07);
-      tone(160, base + 0.09, 0.14, "square", 0.07);
-    }
+    if (correct) { tone(660, base + 0.00, 0.10, "sine", 0.08); tone(880, base + 0.10, 0.12, "sine", 0.08); }
+    else { tone(220, base + 0.00, 0.10, "square", 0.07); tone(160, base + 0.09, 0.14, "square", 0.07); }
   }
 
-  // ---- Answer handling ----
-  function submitAnswer(choice) {
+  const submitAnswer = (choice) => {
     if (phase !== "mesh" || !target) return;
-
-    const coord = targetCoord;
-    const file = coord[0];
-    const rank = parseInt(coord.slice(1), 10);
+    const file = viewFiles[target.c];
+    const rank = viewRanks[target.r];
     const light = isLightSquare(file, rank);
     const correct = (choice === "light" && light) || (choice === "dark" && !light);
 
@@ -379,7 +444,7 @@ function EagleEye() {
     playFeedback(correct);
 
     setPhase("reveal");
-    const delay = Math.max(100, revealMs);
+    const delay = Math.max(100, revealMode === "board" ? revealMs : revealMs);
     setTimeout(() => {
       if (!isRunning) return;
       if (!correct && repeatIncorrect) {
@@ -391,398 +456,232 @@ function EagleEye() {
         pickRandomTarget();
       }
     }, delay);
-  }
-
-  // ---- Reveal patch logic (Mode 1) ----
-  function inRevealPatch(rowIdx, colIdx) {
-    if (!target) return false;
-    if (revealMode === "board") return true;
-    if (revealMode === "square") return rowIdx === target.r && colIdx === target.c;
-    if (revealMode === "2x2") {
-      const r0 = Math.min(target.r, (renderFullBoard?7:n-1));
-      const c0 = Math.min(target.c, (renderFullBoard?7:n-1));
-      const r1 = Math.min(r0 + 1, (renderFullBoard?7:n-1));
-      const c1 = Math.min(c0 + 1, (renderFullBoard?7:n-1));
-      return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
-    }
-    const r0 = Math.max(0, target.r - 1);
-    const c0 = Math.max(0, target.c - 1);
-    const r1 = Math.min((renderFullBoard?7:n-1), target.r + 1);
-    const c1 = Math.min((renderFullBoard?7:n-1), target.c + 1);
-    return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
-  }
-
-  // ---- Square rendering helper ----
-  function squareVisual(rowIdx, colIdx) {
-    const coord = coordAtViewCell(rowIdx, colIdx);
-    const file = coord[0];
-    const rank = parseInt(coord.slice(1), 10);
-    const light = isLightSquare(file, rank);
-
-    const isTarget = target && target.r === rowIdx && target.c === colIdx;
-    const { light: lightCol, dark: darkCol } = THEMES[theme];
-
-    let bg;
-    let border = (phase !== "idle") ? `1px solid var(--mesh-border)` : "none";
-
-    if (phase === "idle") {
-      bg = light ? lightCol : darkCol;
-    } else if (phase === "mesh") {
-      bg = isTarget ? "#9ca3af" : "var(--mesh)";
-    } else {
-      const showColor = revealMode === "board" ? true : inRevealPatch(rowIdx, colIdx);
-      bg = showColor ? (light ? lightCol : darkCol) : "var(--mesh)";
-    }
-
-    let shadow = "";
-    if (phase === "reveal" && isTarget) {
-      shadow = lastResult === "correct" ? "shadowGood" : "shadowBad";
-    }
-    const extraClass = phase === "mesh" && isTarget ? "targetMesh" : "";
-
-    const fileIdxAbs = fileToIndex(file);
-    const rankIdxAbs = rankToIndex(rank);
-    const inside = inActiveRegionAbs(fileIdxAbs, rankIdxAbs);
-
-    const classes = ["square", shadow, extraClass, (restricted && !inside) ? "dim" : ""];
-    if (restricted && inside) {
-      const left = fileIdxAbs === activeStart.file;
-      const right = fileIdxAbs === activeStart.file + n - 1;
-      const bottom = rankIdxAbs === activeStart.rank;
-      const top = rankIdxAbs === activeStart.rank + n - 1;
-      if (left || right || top || bottom) classes.push("focusEdge");
-    }
-
-    return { bg, border, classes: classes.join(" ") };
-  }
-
-  // --- Anchor click (restricted mode) ---
-  function handleSquareClick(rowIdx, colIdx) {
-    if (!restricted) return;
-    const coord = coordAtViewCell(rowIdx, colIdx);
-    const fIdx = fileToIndex(coord[0]);
-    const rIdx = rankToIndex(parseInt(coord.slice(1), 10));
-    if (validAnchor(fIdx, rIdx)) {
-      setAnchor({ file: fIdx, rank: rIdx });
-      if (isRunning) pickRandomTarget();
-    }
-  }
-
-  // ---- Keyboard shortcuts ----
-  function isTypingInEditable(el) {
-    if (!el) return false;
-    const tag = el.tagName;
-    const editable = el.isContentEditable;
-    return editable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-  }
-
+  };
+  const validAnchor = useCallback(
+    (fIdx, rIdx) => (
+      fIdx >= 0 && rIdx >= 0 && fIdx <= 8 - n && rIdx <= 8 - n
+    ),
+    [n]
+  );
   useEffect(() => {
-    function onKeyDown(e) {
-      if (isTypingInEditable(e.target)) return;
+    if (!restricted) return;
+    setAnchor(a => {
+      const f = Math.min(Math.max(0, a.file), 8 - n);
+      const r = Math.min(Math.max(0, a.rank), 8 - n);
+      return (f === a.file && r === a.rank) ? a : { file: f, rank: r };
+    });
+  }, [n, restricted]);
+  
+  // Square click: in this trainer we only use it for moving the restricted anchor (if you enable that later)
+   const handleSquareClick = useCallback((rowIdx, colIdx) => {
+       if (!restricted) return;
+       const fileLetter = viewFiles[colIdx];
+       const rankNum = viewRanks[rowIdx];
+       const fIdx = fileToIndex(fileLetter);
+       const rIdx = rankToIndex(rankNum);
+       if (!validAnchor(fIdx, rIdx)) return;
+       setAnchor({ file: fIdx, rank: rIdx });
+       if (isRunning) pickRandomTarget();
+     }, [restricted, viewFiles, viewRanks, isRunning, pickRandomTarget, validAnchor]);
 
-      const k = e.key.toLowerCase();
-
-      // Space -> start/stop
-      if (k === " ") {
-        e.preventDefault();
-        isRunning ? stopGame() : startGame();
-        return;
-      }
-
-      // Answering during mesh
-      const canAnswer = isRunning && phase === "mesh";
-      if (canAnswer && (k === "l" || e.key === "ArrowLeft")) {
-        e.preventDefault(); submitAnswer("light"); return;
-      }
-      if (canAnswer && (k === "d" || e.key === "ArrowRight")) {
-        e.preventDefault(); submitAnswer("dark"); return;
-      }
-
-      // Board size (only when stopped)
-      if (!isRunning && (k === "[" || k === "]")) {
-        e.preventDefault();
-        setBoardSize((cur) => (k === "[" ? Math.max(3, cur - 1) : Math.min(8, cur + 1)));
-        return;
-      }
-
-      // Reveal mode 1/2/3/4
-      if (["1","2","3","4"].includes(k)) {
-        e.preventDefault();
-        const map = { "1":"square", "2":"2x2", "3":"3x3", "4":"board" };
-        setRevealMode(map[k]);
-        return;
-      }
-
-      // Theme cycle (t)
-      if (k === "t") {
-        e.preventDefault();
-        const order = ["wooden","green","ice","wb"];
-        setTheme((cur) => order[(order.indexOf(cur) + 1) % order.length]);
-        return;
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isRunning, phase]);
-
-  // ---- JSX ----
-  const themeVars = THEMES[theme] || THEMES.green;
-  const answerLightStyle = { background: themeVars.light, borderColor: "#059669", color: "#065f46" };
-  const answerDarkStyle  = { background: themeVars.dark,  borderColor: "#0ea5e9", color: "#0c4a6e" };
-
-  const rows = renderFullBoard ? 8 : n;
-  const cols = renderFullBoard ? 8 : n;
-
-  return (
-    <div className="app">
-      <style>{styles}</style>
-
-      <div className="container">
-        {/* Controls (usable in both modes) */}
-        <div className="controls">
-          {/* Gameplay */}
-          <div className="panel">
-            <div className="panelTitle">Gameplay</div>
-            <div className="row one">
-              <div className="field">
-                <label className="label" htmlFor="mode">Mode</label>
-                <select id="mode" className="select" value={mode} onChange={(e)=>setMode(Number(e.target.value))}>
-                  <option value={1}>Mode 1 — Board visible</option>
-                  <option value={2}>Mode 2 — Prompt only</option>
-                </select>
-              </div>
-            </div>
-            <div className="row">
-              <div className="field">
-                {/* <label className="label">Repeat Wrong</label>
-                <div className="toggle" onClick={()=>setRepeatIncorrect(v=>!v)} role="switch" aria-checked={repeatIncorrect}>
-                  <span className="tlabel">{repeatIncorrect ? "On" : "Off"}</span>
-                  <div className="switch" aria-checked={repeatIncorrect ? "true" : "false"}>
-                    <div className="switchHandle" />
-                  </div>
-                </div> */}
-              </div>
-
-              
-            </div>
-
-            {/* Reveal length – visible & usable in both modes */}
-            <div className="row">
-              <div className="field">
-                <label className="label" htmlFor="revealLen">Reveal length (ms)</label>
-                <input
-                  id="revealLen"
-                  className="range"
-                  type="range"
-                  min={300}
-                  max={2000}
-                  step={50}
-                  value={revealMs}
-                  onChange={(e) => setRevealMs(Number(e.target.value))}
-                />
-                <div style={{fontSize:12, color:"#475569"}}><b>{revealMs} ms</b></div>
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="revealMode">Reveal Mode</label>
-                <select id="revealMode" className="select" value={revealMode} onChange={(e) => setRevealMode(e.target.value)}>
-                  <option value="square">Only selected square</option>
-                  <option value="2x2">2×2 patch (from target)</option>
-                  <option value="3x3">3×3 patch (centered)</option>
-                  <option value="board">Full board</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Board controls – usable in Mode 2 as well */}
-          <div className="panel">
-            <div className="panelTitle">Board</div>
-            <div className="row one">
-              
-              <div className="field">
-                {/* <label className="label">Timer</label> */}
-                {/* <div className="toggle" onClick={()=>setTimerEnabled(v=>!v)} role="switch" aria-checked={timerEnabled}>
-                  <span className="tlabel">{timerEnabled ? "On" : "Off"}</span>
-                  <div className="switch" aria-checked={timerEnabled ? "true" : "false"}>
-                    <div className="switchHandle" />
-                  </div>
-                </div> */}
-                {/* {timerEnabled && (
-                  <input
-                    className="range"
-                    type="range"
-                    min={10}
-                    max={300}
-                    step={5}
-                    value={duration}
-                    onChange={(e)=>setDuration(Number(e.target.value))}
-                    title="Round duration (s)"
-                  />
-                )} */}
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="theme">Theme</label>
-                <select id="theme" className="select" value={theme} onChange={(e)=>setTheme(e.target.value)}>
-                  <option value="wooden">Wooden</option>
-                  <option value="green">Green</option>
-                  <option value="ice">Ice</option>
-                  <option value="wb">White / Black</option>
-                </select>
-              </div>
-            </div>
-            <div className="row">
-              <div className="field">
-                <label className="label">Board Size (n×n)</label>
-                <div className="numCtrl">
-                  <button
-                    className="numBtn"
-                    onClick={()=>{
-                      const newN = Math.max(3, boardSize - 1);
-                      setBoardSize(newN);
-                      if (!validAnchor(anchor.file, anchor.rank)) {
-                        setAnchor({ file: Math.min(anchor.file, 8 - newN), rank: Math.min(anchor.rank, 8 - newN) });
-                      }
-                    }}
-                  >−</button>
-                  <div className="numVal">{boardSize}×{boardSize}</div>
-                  <button
-                    className="numBtn"
-                    onClick={()=>{
-                      const newN = Math.min(8, boardSize + 1);
-                      setBoardSize(newN);
-                      if (!validAnchor(anchor.file, anchor.rank)) {
-                        setAnchor({ file: Math.min(anchor.file, 8 - newN), rank: Math.min(anchor.rank, 8 - newN) });
-                      }
-                    }}
-                  >+</button>
-                </div>
-              </div>
-              <div className="field">
-                <label className="label">Restricted</label>
-                <div className="toggle" onClick={()=>setRestricted(v=>!v)} role="switch" aria-checked={restricted}>
-                  <span className="tlabel">{restricted ? "On" : "Off"}</span>
-                  <div className="switch" aria-checked={restricted ? "true" : "false"}>
-                    <div className="switchHandle" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            
-          </div>
-
-          {/* Actions */}
-          <div className="panel">
-            <div className="panelTitle">Actions</div>
-            <div className="actionsPanel">
-              {!isRunning ? (
-                <button className="btn round" onClick={startGame} title="Start">Start</button>
-              ) : (
-                <button className="btn round destructive" onClick={stopGame}>Stop</button>
-              )}
-
-              <div className="statGrid">
-                <div className="statCard">
-                  <div className="statLabel">Time</div>
-                  <div className="statValue">{timerEnabled ? `${timeLeft}s` : "∞"}</div>
-                </div>
-                <div className="statCard">
-                  <div className="statLabel">Score</div>
-                  <div className="statValue">{score}</div>
-                </div>
-              </div>
-            </div>
-          </div> 
-        </div>
-
-        {/* Center Stage */}
-        <div className="stage">
-          {mode === 1 ? (
-            <div
-              className="boardWrap"
-              style={{
-                ["--light"]: (THEMES[theme] || THEMES.green).light,
-                ["--dark"]: (THEMES[theme] || THEMES.green).dark,
-                ["--rows"]: renderFullBoard?8:n,
-                ["--cols"]: renderFullBoard?8:n
-              }}
+  // Controls (compact; no score/timer)
+  const ControlsPanel = (
+    <div className="grid gap-4">
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm bg-white dark:bg-zinc-900">
+        <div className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Gameplay</div>
+        <div className="grid gap-3">
+          <label className="grid gap-1">
+            <span className="text-sm text-zinc-800 dark:text-zinc-100">Mode</span>
+            <select
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+              value={mode}
+              onChange={(e)=>setMode(Number(e.target.value))}
             >
-              {/* left ranks */}
-              <div className="ranksCol left">
-                {viewRanks.map((r) => (
-                  <div key={`L${r}`} className="rankLbl" style={{width: 22}}>{r}</div>
-                ))}
-              </div>
+              <option value={1}>Mode 1 — Board visible</option>
+              <option value={2}>Mode 2 — Prompt only</option>
+            </select>
+          </label>
 
-              <div className="boardOuter">
-                <div className="board">
-                  {viewRanks.map((rank, rowIdx) =>
-                    viewFiles.map((file, colIdx) => {
-                      const { bg, border, classes } = squareVisual(rowIdx, colIdx);
-                      const key = file + rank;
-                      return (
-                        <div
-                          key={key}
-                          className={classes}
-                          style={{ background: bg, border }}
-                          onClick={() => handleSquareClick(rowIdx, colIdx)}
-                        >
-                          {target && target.r === rowIdx && target.c === colIdx && phase === "mesh" && (
-                            <span className="coordCenter">{file}{rank}</span>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+          <div className="grid gap-1">
+            <label className="text-sm text-zinc-800 dark:text-zinc-100">Reveal length (ms): {revealMs}</label>
+            <input
+              className="w-full accent-zinc-900 dark:accent-zinc-100"
+              type="range" min={300} max={2000} step={50}
+              value={revealMs}
+              onChange={(e)=>setRevealMs(Number(e.target.value))}
+            />
+          </div>
 
-              {/* bottom files */}
-              <div className="filesRow bottom">
-                {viewFiles.map((f) => (
-                  <div key={`BF${f}`} className="fileLbl">{f}</div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="promptZone">
-              <div className="promptCard" role="region" aria-label="Prompt only">
-                {phase === "mesh" && (
-                  <>
-                    <div className="promptCoord">{targetCoord ?? "e4"}</div>
-                    <div className="promptHint">
-                      Press <span className="promptBadge">L ← / D →</span> or use the buttons below
-                    </div>
-                  </>
-                )}
-                {phase === "reveal" && (
-                  <div className="promptHint" style={{color: lastResult === "correct" ? "#059669" : "#e11d48"}}>
-                    {lastResult === "correct" ? "Correct" : "Wrong"}
-                  </div>
-                )}
-                {phase === "idle" && (
-                  <>
-                    <div className="promptCoord">Ready?</div>
-                    <div className="promptHint">Press <span className="promptBadge">Start</span> to begin.</div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
+          <label className="grid gap-1">
+            <span className="text-sm text-zinc-800 dark:text-zinc-100">Reveal Mode</span>
+            <select
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+              value={revealMode}
+              onChange={(e)=>setRevealMode(e.target.value)}
+            >
+              <option value="square">Only selected square</option>
+              <option value="2x2">2×2 patch</option>
+              <option value="3x3">3×3 patch</option>
+              <option value="board">Full board</option>
+            </select>
+          </label>
         </div>
       </div>
 
-      {/* Bottom Answer Bar */}
-      <div className="answerBar" aria-live="polite">
-        <div className="answerWrap">
-          <div className="answerBtns" role="group" aria-label="Choose square color">
-            <button className="btnAnswer" style={answerDarkStyle} onClick={() => submitAnswer("dark")} disabled={!isRunning || phase !== "mesh"}>Dark</button>
-            <button className="btnAnswer" style={answerLightStyle} onClick={() => submitAnswer("light")} disabled={!isRunning || phase !== "mesh"}>Light</button>
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm bg-white dark:bg-zinc-900">
+        <div className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Board</div>
+        <div className="grid gap-3">
+          <label className="grid gap-1">
+            <span className="text-sm text-zinc-800 dark:text-zinc-100">Theme</span>
+            <select
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+              value={theme}
+              onChange={(e)=>setTheme(e.target.value)}
+            >
+              {Object.keys(THEMES).map(k => (<option key={k} value={k}>{k}</option>))}
+            </select>
+          </label>
+
+          <div className="grid gap-1">
+            <span className="text-sm text-zinc-800 dark:text-zinc-100">Board Size (n×n)</span>
+            <div className="flex items-center gap-2">
+              <button
+                className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
+                onClick={() => setBoardSize((n) => Math.max(3, n - 1))}
+              >−</button>
+              <div className="w-16 text-center font-black">{boardSize}×{boardSize}</div>
+              <button
+                className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
+                onClick={() => setBoardSize((n) => Math.min(8, n + 1))}
+              >+</button>
+            </div>
           </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-100">
+            <input type="checkbox" checked={restricted} onChange={()=>setRestricted(v=>!v)} />
+            Restricted sub-board
+          </label>
         </div>
+      </div>
+
+      {/* Start/Stop */}
+      {!isRunning ? (
+        <div
+          className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-center shadow-sm bg-white dark:bg-green-900 text-zinc-900 dark:text-zinc-100 cursor-pointer"
+          onClick={startGame}
+        >
+          Start
+        </div>
+      ) : (
+        <div
+          className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-center shadow-sm bg-white dark:bg-rose-900 text-zinc-900 dark:text-zinc-100 cursor-pointer"
+          onClick={stopGame}
+        >
+          Stop
+        </div>
+      )}
+    </div>
+  );
+
+  // Sidebar (desktop)
+  const sidebar = <div className="hidden md:block overflow-auto max-h-[70vh] pr-1">{ControlsPanel}</div>;
+
+  // Footer: ONLY answer buttons
+  const footer = (
+    <div className="w-full grid grid-cols-2 gap-3 items-center">
+      <button
+        className="h-14 rounded-xl font-black border-2 border-zinc-900 dark:border-zinc-200 text-zinc-900 dark:text-zinc-100"
+        onClick={() => submitAnswer("dark")}
+        disabled={!isRunning || phase !== "mesh" || !target}
+        style={{ background: themeVars.dark }}
+      >
+        Dark
+      </button>
+      <button
+        className="h-14 rounded-xl font-black border-2 border-zinc-900 dark:border-zinc-200 text-zinc-900 dark:text-zinc-100"
+        onClick={() => submitAnswer("light")}
+        disabled={!isRunning || phase !== "mesh" || !target}
+        style={{ background: themeVars.light }}
+      >
+        Light
+      </button>
+    </div>
+  );
+
+  // Header: Score + Time + (mobile-only) Controls button
+  const headerContent = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-base md:text-lg font-semibold">
+        <span className="text-zinc-700 dark:text-zinc-300">Score:</span>{" "}
+        <span className="font-black text-zinc-900 dark:text-zinc-100">{score}</span>
+      </div>
+
+      {/* Mobile-only Controls button */}
+      <button
+        className="md:hidden rounded-lg px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100"
+        onClick={() => setOpenSheet(true)}
+      >
+        Controls
+      </button>
+
+      <div className="text-base md:text-lg font-semibold">
+        <span className="text-zinc-700 dark:text-zinc-300">Time Left(s):</span>{" "}
+        <span className="font-black text-zinc-900 dark:text-zinc-100">{timeLeft}</span>
       </div>
     </div>
   );
+
+  // Stage container ref for measuring fit
+  const stageContainerRef = useRef(null);
+
+  return (
+    <GameLayout
+      headerContent={headerContent}  // ← make sure GameLayout uses this prop name
+      sidebar={sidebar}
+      footer={footer}
+    >
+      <div ref={stageContainerRef} className="w-full overflow-hidden">
+        {/* Mode switch: prompt REPLACES board region */}
+        {mode === 1 ? (
+          <Board
+            containerRef={stageContainerRef}
+            themeVars={themeVars}
+            renderFullBoard={renderFullBoard}
+            n={n}
+            viewFiles={viewFiles}
+            viewRanks={viewRanks}
+            phase={phase}
+            target={target}
+            lastResult={lastResult}
+            restricted={restricted}
+            activeStart={activeStart}
+            onSquareClick={handleSquareClick}
+            revealMode={revealMode}
+          />
+        ) : (
+          <PromptStage
+            phase={phase}
+            lastResult={lastResult}
+            target={target}
+            viewFiles={viewFiles}
+            viewRanks={viewRanks}
+          />
+        )}
+      </div>
+
+      {/* Mobile bottom sheet */}
+      {openSheet && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenSheet(false)} />
+          <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 p-4 max-h-[70vh] overflow-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Controls</h3>
+              <button className="px-3 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700" onClick={() => setOpenSheet(false)}>Close</button>
+            </div>
+            {ControlsPanel}
+          </div>
+        </div>
+      )}
+    </GameLayout>
+  );
 }
-export default EagleEye;

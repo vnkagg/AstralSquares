@@ -1,0 +1,27 @@
+:root {
+    /* Colors */
+    --bg: #0b0d10;
+    --surface: #13161b;
+    --text: #0f172a;
+    --text-weak: #64748b;
+    --brand: #0ea5e9;
+    --accent: #10b981;
+    --success: #16a34a;
+    --warn: #f59e0b;
+    --error: #ef4444;
+    
+    
+    /* Radii */
+    --r-lg: 12px; /* tailwind rounded-lg */
+    --r-2xl: 16px; /* tailwind rounded-2xl */
+    
+    
+    /* Shadows */
+    --shadow-1: 0 1px 2px rgba(2,8,23,.06);
+    --shadow-2: 0 10px 24px rgba(2,8,23,.10);
+    
+    
+    /* Spacing scale just in case */
+    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-6: 24px;
+    }
+    html, body { overflow-x: hidden; }
