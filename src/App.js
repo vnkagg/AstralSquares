@@ -158,15 +158,20 @@ export default function SixPanelApp() {
                 {/* Decorative blur blob */}
                 <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
 
-                <div className="flex aspect-square items-center justify-center p-6">
-                  <span className="text-center text-xl md:text-2xl font-semibold drop-shadow-sm">
-                    {mod.title}
-                  </span>
-                  <span className="text-center text-bottom text-l text-i md:text-xl font-semibold drop-shadow-sm">
-                    {mod.description}
-                  </span>
-                  
-                </div>
+                <div className="relative aspect-square w-full p-6">
+  {/* Title centered vertically & horizontally */}
+  <div className="absolute inset-0 flex items-center justify-center text-center px-4">
+    <h3 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight drop-shadow-sm">
+      {mod.title}
+    </h3>
+  </div>
+
+  {/* Description near the bottom, subtle */}
+  <p className="absolute inset-x-4 bottom-4 text-xs md:text-sm italic font-semibold text-white/70 leading-snug">
+    {mod.description}
+  </p>
+</div>
+
               </button>
             ))}
           </div>
@@ -223,19 +228,11 @@ export default function SixPanelApp() {
                     : "hover:bg-zinc-100 dark:hover:bg-zinc-900/40",
                 ].join(" ")}
               >
-                <div className="flex aspect-square flex-col items-center justify-center p-6 text-center relative">
-  {/* Title in the middle */}
-  <h3 className="text-2xl md:text-3xl font-bold tracking-tight drop-shadow-sm">
-    {m.title}
-  </h3>
-
-  {/* Description near bottom */}
-  <p className="absolute bottom-4 text-xs md:text-sm italic text-white/70 px-2">
-    {m.description}
-  </p>
-</div>
-
-
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-zinc-400" />
+                  <span className="font-medium">{m.title}</span>
+                </div>
+                <div className="text-xs text-zinc-500">{m.description}</div>
               </button>
             ))}
           </nav>
