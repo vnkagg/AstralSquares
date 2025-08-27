@@ -49,12 +49,12 @@ export default function SixPanelApp() {
   // Register your components here (title, id, and element)
   const modules = useMemo(
     () => [
-      { id: "comp-a", title: "Eagle Eye", element: <EagleEye />, description: "Picture all the squares" },
-      { id: "comp-b", title: "Mind Mirage", element: <MindMirage /> , description: "Practice Spatial Positions of Pieces" },
-      { id: "comp-c", title: "Ghost Moves", element: <GhostMoves /> , description: "Literally Play Blindfold Chess" },
-      { id: "comp-d", title: "Piece Checkmates", element: <EagleEye /> , description: "Practice all the theoretical Endgames" },
-      { id: "comp-e", title: "Square Sniper", element: <MindMirage /> , description: "Remember the Coordinates" },
-      { id: "comp-f", title: "Vector Hunt", element: <MindMirage /> , description: "Connect the coordinates using pieces" },
+      { id: "comp-a", title: "Eagle Eye", element: <EagleEye />, description: "Picture all the squares", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
+      { id: "comp-b", title: "Mind Mirage", element: <MindMirage /> , description: "Practice Spatial Positions of Pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
+      { id: "comp-e", title: "Square Sniper", element: <MindMirage /> , description: "Remember the Coordinates", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
+      { id: "comp-f", title: "Vector Hunt", element: <MindMirage /> , description: "Connect the coordinates using pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
+      { id: "comp-c", title: "Ghost Moves", element: <GhostMoves /> , description: "Literally Play Blindfold Chess", bg: "from-fuchsia-500 via-pink-500 to-rose-500" },
+      { id: "comp-d", title: "Piece Checkmates", element: <EagleEye /> , description: "Practice all the theoretical Endgames", bg: "from-amber-400 via-orange-500 to-red-500" },
     ],
     []
   );
@@ -150,7 +150,7 @@ export default function SixPanelApp() {
                 className={[
                   "group relative overflow-hidden rounded-2xl shadow-lg",
                   "bg-gradient-to-br text-white",
-                  tileGradients[i % tileGradients.length],
+                  mod.bg,
                   "transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black/50 focus-visible:ring-offset-white dark:focus-visible:ring-white/50 dark:focus-visible:ring-offset-zinc-900",
                 ].join(" ")}
                 aria-label={`Open ${mod.title}`}
@@ -223,11 +223,19 @@ export default function SixPanelApp() {
                     : "hover:bg-zinc-100 dark:hover:bg-zinc-900/40",
                 ].join(" ")}
               >
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-zinc-400" />
-                  <span className="font-medium">{m.title}</span>
-                </div>
-                <div className="text-xs text-zinc-500">{m.description}</div>
+                <div className="flex aspect-square flex-col items-center justify-center p-6 text-center relative">
+  {/* Title in the middle */}
+  <h3 className="text-2xl md:text-3xl font-bold tracking-tight drop-shadow-sm">
+    {m.title}
+  </h3>
+
+  {/* Description near bottom */}
+  <p className="absolute bottom-4 text-xs md:text-sm italic text-white/70 px-2">
+    {m.description}
+  </p>
+</div>
+
+
               </button>
             ))}
           </nav>
