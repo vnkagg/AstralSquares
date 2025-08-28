@@ -7,7 +7,8 @@ import SquareSniper from './squaresniper';
 import PieceEndgames from './pieceendgames';
 import VectorHunt from './vectorhunt';
 // import React, { useState } from "react";
-import './tailwind.css';
+import './tailwind.gen.css';
+
 import './core/theme/tokens.css'
 
 

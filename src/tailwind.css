@@ -1349,6 +1349,9 @@
   .ring-black {
     --tw-ring-color: var(--color-black);
   }
+  .ring-emerald-400 {
+    --tw-ring-color: var(--color-emerald-400);
+  }
   .ring-emerald-400\/70 {
     --tw-ring-color: color-mix(in srgb, oklch(76.5% 0.177 163.223) 70%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
