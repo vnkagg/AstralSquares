@@ -282,6 +282,7 @@ export default function SquareSniper() {
     setTimeLeft(60);
     setRunning(true);
     pickNewTarget();
+    setShowSheet(false);
   }, [running, pickNewTarget]);
 
   const stopGame = useCallback(() => {

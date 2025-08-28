@@ -23,6 +23,26 @@ const filesAll = ["a","b","c","d","e","f","g","h"];
 const toKey = (r,c) => `${r},${c}`;
 const inBounds = (r,c,n) => r>=0 && c>=0 && r<n && c<n;
 
+/* Inline SVG icons: Eye / Eye-Off */
+function EyeIcon({ size=32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M2.04 12.32c2.09-3.95 5.62-6.32 9.96-6.32 4.34 0 7.87 2.37 9.96 6.32a1 1 0 0 1 0 .96c-2.09 3.95-5.62 6.32-9.96 6.32-4.34 0-7.87-2.37-9.96-6.32a1 1 0 0 1 0-.96z" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+function EyeOffIcon({ size=32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M2.04 12.32c2.09-3.95 5.62-6.32 9.96-6.32 2.04 0 3.92.47 5.56 1.38" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M21.96 12.68c-2.09 3.95-5.62 6.32-9.96 6.32-2.04 0-3.92-.47-5.56-1.38" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M9.5 9.5a3.5 3.5 0 0 0 4.95 4.95" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 /* Moves on an empty board */
 function slidesFrom(r,c,dirs,occ,n){
   const out=[];
@@ -86,11 +106,11 @@ function Board({
   containerRef,
   n,
   themeVars,
-  positions,           // {Q:[r,c], ...}
-  targetSq,            // [r,c] | null
+  positions,
+  targetSq,
   running,
-  shouldShowPieces,    // derived from peek (hold/toggle) or not running
-  anim,                // { type, from:[r,c], to:[r,c], key }
+  shouldShowPieces,
+  anim,
   animateMoves,
 }) {
   const [side, setSide] = useState(360);
@@ -117,11 +137,10 @@ function Board({
 
   const isLightSquare = (r,c) => ((c + (n-1-r)) % 2) === 1; // a1 dark
   const fileLetters = useMemo(()=> filesAll.slice(0,n), [n]);
-  const viewRanks = useMemo(()=> Array.from({length:n},(_,i)=> n - i), [n]);       // n..1 (top..bottom)
+  const viewRanks = useMemo(()=> Array.from({length:n},(_,i)=> n - i), [n]);
   const displayRows = useMemo(()=> Array.from({length:n},(_,r)=> r), [n]);
   const displayCols = useMemo(()=> Array.from({length:n},(_,c)=> c), [n]);
 
-  // Subtle line animation overlay (~66% of path, quick fade)
   function LineAnim() {
     const color = "white";
     if (!anim || !animateMoves) return null;
@@ -136,8 +155,6 @@ function Board({
             <feGaussianBlur stdDeviation="0.6" />
           </filter>
         </defs>
-
-        {/* blurred tail (slightly delayed, softer color/opacity) */}
         <path d={`M ${x1} ${y1} L ${x2} ${y2}`}
               pathLength="1" stroke={color} strokeWidth="2" strokeLinecap="round" fill="none"
               opacity="0.38" filter="url(#sd-blur)">
@@ -146,8 +163,6 @@ function Board({
           <animate attributeName="opacity" values="0.0;0.38;0.0" dur="0.38s"
                   keyTimes="0;0.35;1" calcMode="spline" keySplines="0.25 0.8 0.25 1;0.25 0.8 0.25 1" />
         </path>
-
-        {/* gentle head (short dash that glides) */}
         <path d={`M ${x1} ${y1} L ${x2} ${y2}`}
               pathLength="1" stroke={color} strokeWidth="1.6" strokeLinecap="round" fill="none">
           <animate attributeName="stroke-dasharray" values="0.12 0.88;0.12 0.88;1 0" dur="0.34s"
@@ -189,24 +204,19 @@ function Board({
           className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden relative"
           style={{ width: side, height: side, gridColumn: 2, gridRow: 1 }}
         >
-          {/* subtle path animation overlay */}
           <LineAnim />
-
           <div
             className="w-full h-full grid"
             style={{ gridTemplateColumns: `repeat(${n}, 1fr)`, gridTemplateRows: `repeat(${n}, 1fr)` }}
             role="grid"
             aria-label="Mind Mirage board"
           >
-            {displayRows.map((r) =>
-              displayCols.map((c) => {
-                const light = isLightSquare(r,c);
+            {Array.from({length:n},(_,r)=>r).map((r) =>
+              Array.from({length:n},(_,c)=>c).map((c) => {
+                const light = ((c + (n-1-r)) % 2) === 1; // a1 dark
                 const bg = light ? themeVars.light : themeVars.dark;
-
-                // draw pieces depending on peek/running
                 const entry = Object.entries(positions).find(([, rc]) => rc[0]===r && rc[1]===c);
                 const hereType = entry?.[0];
-
                 const isTarget = !!targetSq && r===targetSq[0] && c===targetSq[1];
 
                 return (
@@ -221,7 +231,6 @@ function Board({
                       ...(r===n-1?{borderBottom:"1px solid rgba(113,113,122,.6)"}:{}),
                     }}
                   >
-                    {/* target marker (centered bouncy dot) */}
                     {isTarget && (
                       <div
                         className="absolute rounded-full"
@@ -230,7 +239,6 @@ function Board({
                           height: "22%",
                           left: "50%",
                           top: "50%",
-                          // no inline transform: keyframes control translate to keep center + bob
                           background: "#111",
                           border: "3px solid #fff",
                           borderRadius: "9999px",
@@ -240,7 +248,6 @@ function Board({
                       />
                     )}
 
-                    {/* pieces (visible if !running OR peek active) */}
                     {hereType && (shouldShowPieces || !running) && (
                       <img
                         className="absolute"
@@ -303,7 +310,7 @@ export default function MindMirage() {
   const [theme, setTheme] = useState("wooden");
   const themeVars = THEMES[theme] || THEMES.green;
 
-  const [n, setN] = useState(8);                               // 3..8
+  const [n, setN] = useState(8);
   const [sel, setSel] = useState({ Q:true, R:true, B:true, N:true });
   const selectedTypes = useMemo(()=>["Q","R","B","N"].filter(t=>sel[t]),[sel]);
 
@@ -312,21 +319,21 @@ export default function MindMirage() {
   const [timeLeft, setTimeLeft] = useState(60);
   const timerRef = useRef(null);
 
-  const [positions, setPositions] = useState({});              // {Q:[r,c],...}
-  const [targetSq, setTarget] = useState(null);                // [r,c] | null
+  const [positions, setPositions] = useState({});
+  const [targetSq, setTarget] = useState(null);
   const [validTypesForTarget, setValidTypesForTarget] = useState(new Set());
   const [clickedAnswer, setClickedAnswer] = useState(null);
 
-  const [uniqueTarget, setUniqueTarget] = useState(true); // true = only one piece can reach
+  const [uniqueTarget, setUniqueTarget] = useState(true);
 
   // Peek: hold or toggle
-  const [peekHold, setPeekHold] = useState(false);             // while P held or button held
-  const [peekToggle, setPeekToggle] = useState(false);         // controls checkbox
+  const [peekHold, setPeekHold] = useState(false);
+  const [peekToggle, setPeekToggle] = useState(false); // (kept for future use)
   const shouldShowPieces = running ? (peekHold || peekToggle) : true;
 
   // Animation toggle
   const [animateMoves, setAnimateMoves] = useState(true);
-  const [anim, setAnim] = useState(null);                      // {type, from:[r,c], to:[r,c], key}
+  const [anim, setAnim] = useState(null);
 
   /* audio */
   const audioCtxRef = useRef(null);
@@ -361,13 +368,11 @@ export default function MindMirage() {
     // eslint-disable-next-line
     [n, sel.Q, sel.R, sel.B, sel.N]);
 
-  /* target picking (now honors uniqueTarget with graceful fallback) */
   const pickTarget = useCallback((fromPos = positions, requireUnique = uniqueTarget) => {
     const map = computeTargets(fromPos, n);
-    const entries = Array.from(map.entries()); // [ ["r,c", Set(types)] , ... ]
+    const entries = Array.from(map.entries());
 
     if(entries.length === 0){
-      // no legal targets from current positions — reroll
       randomizePositions();
       return;
     }
@@ -377,13 +382,12 @@ export default function MindMirage() {
 
     let pool;
     if (requireUnique) {
-      pool = uniques.length ? uniques : anyReach; // fallback if no unique squares exist
+      pool = uniques.length ? uniques : anyReach;
     } else {
       pool = anyReach;
     }
 
     if (!pool.length) {
-      // extreme edge case; reroll positions
       randomizePositions();
       return;
     }
@@ -394,7 +398,6 @@ export default function MindMirage() {
     setValidTypesForTarget(new Set(setTypes));
   }, [positions, n, uniqueTarget, randomizePositions]);
 
-  /* when Target Rule toggles during a run, immediately repick a compliant target */
   useEffect(() => {
     if (running) {
       pickTarget(positions, uniqueTarget);
@@ -402,7 +405,6 @@ export default function MindMirage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uniqueTarget]);
 
-  /* timer */
   useEffect(()=>{
     if(!running){ if(timerRef.current){clearInterval(timerRef.current); timerRef.current=null;} return; }
     setTimeLeft(60);
@@ -415,20 +417,19 @@ export default function MindMirage() {
     return ()=>{ if(timerRef.current){clearInterval(timerRef.current); timerRef.current=null;} };
   },[running]);
 
-  /* game flow */
   function startGame(){
     if(running || selectedTypes.length===0) return;
     setMoves(0);
     setRunning(true);
     pickTarget(positions, uniqueTarget);
     setShowSheet(false);
+    setPeekHold(false);
   }
   function stopGame(withBuzz=false){
     setRunning(false);
     if(withBuzz) bad();
     setTarget(null);
-    // reset peek-hold so it doesn't “stick” after stop
-    setPeekHold(false);
+    setPeekHold(false); // ensure it never “sticks”
   }
   function handleAnswer(t){
     if(!running || !targetSq) return;
@@ -441,17 +442,14 @@ export default function MindMirage() {
     good();
 
     if (animateMoves) {
-      // start subtle line animation overlay
       const key = Date.now();
       setAnim({ type: t, from, to, key });
-
-      // commit move shortly after the spark finishes
       setTimeout(()=>{
         const newPos={...positions, [t]: to};
         setPositions(newPos); setMoves(m=>m+1);
         setAnim(null);
         pickTarget(newPos, uniqueTarget);
-      }, 380); // ~240ms draw + ~140ms fade
+      }, 380);
     } else {
       const newPos={...positions, [t]: to};
       setPositions(newPos); setMoves(m=>m+1);
@@ -459,14 +457,13 @@ export default function MindMirage() {
     }
   }
 
-  /* keyboard: space to start/stop; P to hold peek; Q/R/B/N to answer (J/K/L/; aliases) */
+  /* keyboard */
   useEffect(()=>{
     function onKeyDown(e){
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
       let k = e.key.toLowerCase();
 
       if (k === " ") { e.preventDefault(); running? stopGame(false): startGame(); return; }
-
       if (k === "p") { e.preventDefault(); setPeekHold(true); }
 
       if (!running || !targetSq) return;
@@ -490,7 +487,7 @@ export default function MindMirage() {
     };
   }, [running, targetSq, sel]);
 
-  /* sidebar controls (Eagle-Eye style) */
+  /* sidebar controls */
   const ControlsPanel = (
     <div className="grid gap-4">
       {/* Pieces */}
@@ -597,7 +594,7 @@ export default function MindMirage() {
                   Peek
                 </button>
 
-                {/* Animation (toggle) — pressed style when enabled */}
+                {/* Animation (toggle) */}
                 <button
                   className={btnClass(animateMoves, true)}
                   onClick={() => setAnimateMoves(v => !v)}
@@ -669,25 +666,54 @@ export default function MindMirage() {
 
   const sidebar = <div className="hidden md:block overflow-auto max-h=[70vh] pr-1">{ControlsPanel}</div>;
 
-  /* footer = answer buttons */
+  /* footer = answer buttons (+ Peek hold/press) */
   const footer = (
     <div className="w-full flex flex-wrap gap-3 items-center justify-center">
       {["Q","R","B","N"].filter(t=>sel[t]).map(t=>(
         <button
           key={t}
-          className={`h-16 w-16 rounded-full border-2 flex items-center justify-center ${clickedAnswer===t ? "border-sky-500" : "border-zinc-900 dark:border-zinc-200"}`}
+          className={[
+            "h-16 w-16 rounded-full border-2 flex items-center justify-center",
+            clickedAnswer===t ? "border-sky-500" : "border-zinc-900 dark:border-zinc-200",
+            "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+          ].join(" ")}
           onClick={()=>handleAnswer(t)}
           disabled={!running || !targetSq}
           title={{Q:"Queen",R:"Rook",B:"Bishop",N:"Knight"}[t]}
-          style={{ background: "#fff" }}
         >
-          <img src={WHITE[t]} alt={t} style={{ width:44, height:44, filter:"drop-shadow(0 2px 2px rgba(0,0,0,.18))" }} />
+          <img
+            src={WHITE[t]}
+            alt={t}
+            style={{ width:44, height:44, filter:"drop-shadow(0 2px 2px rgba(0,0,0,.18))" }}
+          />
         </button>
       ))}
+
+      {/* NEW: Footer Peek (hold/press) button with Eye / Eye-Off */}
+      <button
+        key="peek"
+        className={[
+          "h-16 w-16 rounded-full border-2 flex items-center justify-center transition",
+          peekHold ? "border-emerald-500 ring-2 ring-emerald-400/70" : "border-zinc-900 dark:border-zinc-200",
+          "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 active:scale-[0.98]"
+        ].join(" ")}
+        onPointerDown={() => running && setPeekHold(true)}
+        onPointerUp={() => setPeekHold(false)}
+        onPointerLeave={() => setPeekHold(false)}
+        onPointerCancel={() => setPeekHold(false)}
+        aria-pressed={peekHold}
+        disabled={!running}
+        title="Hold to Peek (or press P)"
+      >
+        {peekHold ? <EyeIcon size={ thirtyTwo() } /> : <EyeOffIcon size={ thirtyTwo() } />}
+      </button>
     </div>
   );
 
-  /* header content (Mind Mirage variant) */
+  // tiny helper (avoids magic number in JSX)
+  function thirtyTwo(){ return 32; }
+
+  /* header content */
   const headerContent = (
     <div className="flex items-center justify-between gap-3">
       <div className="text-base md:text-lg font-semibold">
@@ -711,8 +737,6 @@ export default function MindMirage() {
   );
 
   const stageContainerRef = useRef(null);
-
-  /* mobile bottom sheet */
   const [showSheet, setShowSheet] = useState(false);
 
   return (

@@ -259,16 +259,25 @@ const ENDGAME_ABBR_TO_CODE = {
   "K + B + N vs K": "KBNK",
   "K + N + N + P vs K": "KNNPK",
   "K + P vs K": "KPK",
-  "K + a/hP vs K": "KAhPK",
+  "K + (a/h)P vs K": "KAhPK",
 };
+// const CODE_TO_FULL = {
+//   KQK:   "King Queen vs King",
+//   KRK:   "King Rook vs King",
+//   KBBK:  "King Bishop Bishop vs King",
+//   KBNK:  "King Bishop Knight vs King",
+//   KNNPK: "King Knight Knight Pawn vs King",
+//   KPK:   "King Pawn vs King",
+//   KAhPK: "King a/h Pawn vs King",
+// };
 const CODE_TO_FULL = {
-  KQK:   "King Queen vs King",
-  KRK:   "King Rook vs King",
-  KBBK:  "King Bishop Bishop vs King",
-  KBNK:  "King Bishop Knight vs King",
-  KNNPK: "King Knight Knight Pawn vs King",
-  KPK:   "King Pawn vs King",
-  KAhPK: "King a/h Pawn vs King",
+  KQK:   "Queen Checkmate",
+  KRK:   "Rook Checkmate",
+  KBBK:  "Bishop Pair Checkmate",
+  KBNK:  "Bishop Knight Checkmate",
+  KNNPK: "2 Knights and a Pawn Checkmate",
+  KPK:   "Pawn Promotion",
+  KAhPK: "a/h Pawn Promotion",
 };
 function kindLabel(code){ return CODE_TO_FULL[code] || "King Queen vs King"; }
 
@@ -376,7 +385,7 @@ export default function PieceEndgames() {
   const endCode = ENDGAME_ABBR_TO_CODE[endAbbr] || "KQK";
   const [playAs, setPlayAs] = useState("w");                 // player side
   const [vsMode, setVsMode] = useState("engine");            // 'engine' | 'human'
-  const [engineStyle, setEngineStyle] = useState("random");  // 'top' | 'random'
+  const [engineStyle, setEngineStyle] = useState("top");  // 'top' | 'random'
 
   // chess engine (rules)
   const [game] = useState(() => new Chess());
@@ -449,8 +458,8 @@ export default function PieceEndgames() {
 
   /* ---------- timer (optional) ---------- */
   const [timerEnabled, setTimerEnabled] = useState(false);
-  const [timerMin, setTimerMin] = useState(3);
-  const [timerSec, setTimerSec] = useState(0);
+  const [timerMin, setTimerMin] = useState(0);
+  const [timerSec, setTimerSec] = useState(30);
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const timerRef = useRef(null);
@@ -688,12 +697,12 @@ export default function PieceEndgames() {
     <div className="w-full grid grid-cols-[1fr_auto_1fr] items-center gap-2">
       {/* Left: engine badges + mobile controls */}
       <div className="flex items-center gap-2">
-        <div className="text-xs md:text-sm text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+        {/* <div className="text-xs md:text-sm text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
           {engineThinking && <span>engine…</span>}
           {(engineMate != null || engineEval != null) && (
             <span>{engineMate != null ? `Mate ${engineMate>0?engineMate:-engineMate}` : `Eval ${engineEval?.toFixed?.(2)}`}</span>
           )}
-        </div>
+        </div> */}
         <button
           className="md:hidden ml-2 rounded-lg px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100"
           onClick={()=>setShowSheet(true)}
@@ -709,12 +718,12 @@ export default function PieceEndgames() {
 
       {/* Right: status + Moves drawer button */}
       <div className="flex items-center gap-2 justify-end">
-        <div
+        {/* <div
           className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-sm text-zinc-800 dark:text-zinc-100 bg-white dark:bg-zinc-900"
           title="Drill status"
         >
           {statusText}
-        </div>
+        </div> */}
         <button
           className="rounded-lg px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100"
           onClick={()=> setShowMovesPanel(true)}
@@ -865,7 +874,7 @@ export default function PieceEndgames() {
   const footer = (
     <div className="w-full flex flex-wrap gap-3 items-center justify-center">
       <div className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm">
-        Moves: <span className="font-bold">{fullMoves}</span>/50
+        Moves: <span className="font-bold">{fullMoves}/50 {game.isCheckmate() ? "#" : ""} {game.isStalemate() ? "½-½" : ""}</span>
       </div>
       <div className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm">
         Timer: <span className="font-bold">{timerEnabled ? fmtMMSS(timeLeft) : "—"}</span>

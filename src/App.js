@@ -5,6 +5,7 @@ import MindMirage from './mindmirage';
 import GhostMoves from './ghostmoves';
 import SquareSniper from './squaresniper';
 import PieceEndgames from './pieceendgames';
+import VectorHunt from './vectorhunt';
 // import React, { useState } from "react";
 import './tailwind.css';
 import './core/theme/tokens.css'
@@ -54,9 +55,9 @@ export default function SixPanelApp() {
       { id: "comp-a", title: "Eagle Eye", element: <EagleEye />, description: "Picture all the squares", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
       { id: "comp-b", title: "Mind Mirage", element: <MindMirage /> , description: "Develop Spatial Memory for Pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
       { id: "comp-e", title: "Square Sniper", element: <SquareSniper /> , description: "Locate the Coordinates notation", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
-      { id: "comp-f", title: "Vector Hunt", element: <MindMirage /> , description: "Remove the blur, Connect the coordinates using pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
+      { id: "comp-f", title: "Vector Hunt", element: <VectorHunt /> , description: "Remove the blur, Connect the coordinates using pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
       { id: "comp-c", title: "Ghost Moves", element: <GhostMoves /> , description: "Aakhri Padav: Literally Play Blindfold Chess", bg: "from-fuchsia-500 via-pink-500 to-rose-500" },
-      { id: "comp-d", title: "Piece Checkmates", element: <PieceEndgames /> , description: "Truly master the theoretical Endgames", bg: "from-amber-400 via-orange-500 to-red-500" },
+      { id: "comp-d", title: "Roaring Rhegar", element: <PieceEndgames /> , description: "Truly master the theoretical Endgames", bg: "from-amber-400 via-orange-500 to-red-500" },
     ],
     []
   );
