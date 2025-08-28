@@ -398,8 +398,8 @@ export default function EagleEye() {
       }
 
       const canAnswer = isRunning && phase === "mesh" && target;
-      if (canAnswer && (k === "l" || e.key === "ArrowLeft")) { e.preventDefault(); submitAnswer("light"); return; }
-      if (canAnswer && (k === "d" || e.key === "ArrowRight")) { e.preventDefault(); submitAnswer("dark"); return; }
+      if (canAnswer && (k === "l" || e.key === "ArrowRight")) { e.preventDefault(); submitAnswer("light"); return; }
+      if (canAnswer && (k === "d" || e.key === "ArrowLeft")) { e.preventDefault(); submitAnswer("dark"); return; }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

@@ -3,6 +3,8 @@ import './App.css';
 import EagleEye from './eagleeye';
 import MindMirage from './mindmirage';
 import GhostMoves from './ghostmoves';
+import SquareSniper from './squaresniper';
+import PieceEndgames from './pieceendgames';
 // import React, { useState } from "react";
 import './tailwind.css';
 import './core/theme/tokens.css'
@@ -50,11 +52,11 @@ export default function SixPanelApp() {
   const modules = useMemo(
     () => [
       { id: "comp-a", title: "Eagle Eye", element: <EagleEye />, description: "Picture all the squares", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
-      { id: "comp-b", title: "Mind Mirage", element: <MindMirage /> , description: "Practice Spatial Positions of Pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
-      { id: "comp-e", title: "Square Sniper", element: <MindMirage /> , description: "Remember the Coordinates", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
-      { id: "comp-f", title: "Vector Hunt", element: <MindMirage /> , description: "Connect the coordinates using pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
-      { id: "comp-c", title: "Ghost Moves", element: <GhostMoves /> , description: "Literally Play Blindfold Chess", bg: "from-fuchsia-500 via-pink-500 to-rose-500" },
-      { id: "comp-d", title: "Piece Checkmates", element: <EagleEye /> , description: "Practice all the theoretical Endgames", bg: "from-amber-400 via-orange-500 to-red-500" },
+      { id: "comp-b", title: "Mind Mirage", element: <MindMirage /> , description: "Develop Spatial Memory for Pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
+      { id: "comp-e", title: "Square Sniper", element: <SquareSniper /> , description: "Locate the Coordinates notation", bg: "from-emerald-500 via-teal-500 to-cyan-500" },
+      { id: "comp-f", title: "Vector Hunt", element: <MindMirage /> , description: "Remove the blur, Connect the coordinates using pieces", bg: "from-blue-500 via-indigo-500 to-violet-500" },
+      { id: "comp-c", title: "Ghost Moves", element: <GhostMoves /> , description: "Aakhri Padav: Literally Play Blindfold Chess", bg: "from-fuchsia-500 via-pink-500 to-rose-500" },
+      { id: "comp-d", title: "Piece Checkmates", element: <PieceEndgames /> , description: "Truly master the theoretical Endgames", bg: "from-amber-400 via-orange-500 to-red-500" },
     ],
     []
   );
@@ -137,7 +139,7 @@ export default function SixPanelApp() {
       <div className="min-h-screen w-full bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
         <header className="max-w-6xl mx-auto px-4 py-8">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Astral Squares</h1>
-          <p className="text-zinc-600 dark:text-zinc-400 mt-2">My tools to become an expert in Blindfold Chess</p>
+          <p className="text-zinc-600 dark:text-zinc-400 mt-2">Apun ko chess gawd ban ne ka hai. 1st Jan 2026 tak Blindfold chess matches khelne ke hain.</p>
         </header>
 
         <main className="max-w-6xl mx-auto px-4 pb-12">
@@ -177,7 +179,7 @@ export default function SixPanelApp() {
           </div>
         </main>
 
-        <footer className="text-center text-xs text-zinc-500 py-6">Press Esc to go back from a module</footer>
+        {/* <footer className="text-center text-xs text-zinc-500 py-6">Press Esc to go back from a module</footer> */}
       </div>
     );
   }
