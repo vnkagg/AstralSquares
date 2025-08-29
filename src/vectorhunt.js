@@ -132,9 +132,9 @@ function PillSwitch({ checked, onChange, label }) {
 export default function VectorHunt() {
   // options
   const [colorizeBlocks, setColorizeBlocks] = useState(true);
-  const [dictate, setDictate] = useState(false);
+  const [dictate, setDictate] = useState(true);
   const [includeColorWords, setIncludeColorWords] = useState(true);
-  const [pieceMode, setPieceMode] = useState("random"); // 'n','b','r','random'
+  const [pieceMode, setPieceMode] = useState("n"); // 'n','b','r','random'
 
   // drill
   const [drillRunning, setDrillRunning] = useState(false);
@@ -144,7 +144,7 @@ export default function VectorHunt() {
 
   // speech config
   const [speed, setSpeed] = useState(0.9);      // 0.03..2.0
-  const [accent, setAccent] = useState("en-US");// en-US | en-GB | en-IN
+  const [accent, setAccent] = useState("en-IN");// en-US | en-GB | en-IN
 
   // squares & piece
   const [s1, setS1] = useState(() => randSq());
@@ -200,7 +200,9 @@ export default function VectorHunt() {
 
   function promptChunks(s1p, s2p, p){
     const c1 = squareColor(s1p), c2 = squareColor(s2p);
-    if (includeColorWords) return [`Move the ${pieceName(p)} from the ${clrWord(c1)} ${s1p} square to the ${clrWord(c2)} ${s2p} square.`];
+    s1p = s1p.toUpperCase();
+    s2p = s2p.toUpperCase();
+    if (includeColorWords) return [`Move the ${pieceName(p)} from the ${s1p} ${clrWord(c1)} square to the ${s2p} ${clrWord(c2)} square.`];
     return [`Move the ${pieceName(p)} from ${s1p} to ${s2p}.`];
   }
   function pathChunks(s1p, s2p, p){
@@ -210,11 +212,11 @@ export default function VectorHunt() {
     else if (p === "r") route = rookPath(s1p, s2p);
     else route = bishopPath(s1p, s2p);
     if (!route || route.length < 1) return [];
-    const start = includeColorWords ? `${clrWord(squareColor(route[0]))} ${route[0]}` : route[0];
+    const start = includeColorWords ? `${route[0]} ${clrWord(squareColor(route[0]))}` : route[0];
     const seq = [`${pieceName(p)} on ${start}`];
     for (let i = 1; i < route.length; i++){
       const sq = route[i];
-      const seg = includeColorWords ? `${clrWord(squareColor(sq))} ${sq}` : sq;
+      const seg = includeColorWords ? `${sq} ${clrWord(squareColor(sq))}` : sq;
       seq.push(`goes to ${seg}`);
     }
     return [seq.join(" ") + "."];

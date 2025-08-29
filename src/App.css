@@ -1,4 +1,4 @@
-.App {
+/* .App {
   text-align: center;
 }
 
@@ -35,4 +35,34 @@
   to {
     transform: rotate(360deg);
   }
+} */
+/* Mobile in-square coordinate chip — subtle, readable on any square */
+.coord-badge {
+  position: absolute;
+  z-index: 4;
+  font-weight: 800;
+  line-height: 1;
+  font-size: 11px;               /* crisp but not shouty */
+  letter-spacing: 0.02em;
+  padding: 2px 6px;               /* tiny pill */
+  border-radius: 9999px;          /* full pill */
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+  border: 1px solid rgba(255,255,255,.35);
+  transform: translateZ(0);       /* keep text sharp during transforms */
+  user-select: none;
+  pointer-events: none;
+}
+.coord-badge--topLeft  { top: 6px;  left: 6px; }
+.coord-badge--botRight { bottom: 6px; right: 6px; }
+
+/* Auto-contrast: choose light/dark depending on square color */
+.coord-badge--onLight {
+  background: rgba(17,17,17,.08);
+  color: rgba(17,17,17,.85);
+}
+.coord-badge--onDark {
+  background: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.96);
+  border-color: rgba(255,255,255,.28);
 }

@@ -1,3 +1,4 @@
+
 import React from "react";
 
 /**
@@ -26,7 +27,11 @@ export default function GameLayout({
       </header>
 
       {/* BODY: Sidebar (md+) + Main */}
-      <main className="mx-auto max-w-6xl px-4 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4">
+      {/* <main className="mx-auto max-w-6xl px-4 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4"> */}
+      {/* <main className="mx-auto max-w-6xl px-0 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4"> */}
+      {/* <main className="mx-auto max-w-6xl px-0 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4"> */}
+{/* <main className="mx-auto max-w-none md:max-w-6xl px-0 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4"> */}
+<main className="mx-auto max-w-none md:max-w-6xl px-0 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)] gap-4">
         {/* Sidebar (hidden at small sizes if the caller chooses) */}
         {sidebar ? (
           <aside className="order-2 md:order-1 md:sticky md:top-4 md:self-start overflow-visible">

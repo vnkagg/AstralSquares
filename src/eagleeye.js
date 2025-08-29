@@ -1,49 +1,172 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameLayout from "./games/shared/GameLayout";
 
-/** Board themes */
+/* ---------- Themes (match Square Sniper) ---------- */
 const THEMES = {
-  wooden: { light: "#EBD3B0", dark: "#AE6B36" },
-  green:  { light: "#e6f4ea", dark: "#0d7a5f" },
-  ice:    { light: "#eaf6ff", dark: "#2e5eaa" },
-  wb:     { light: "#ffffff", dark: "#000000" },
+  classicWood: { light: "#F0D9B5", dark: "#B58863", texture: "classicWood" },
+  walnut:      { light: "#D6BB90", dark: "#6F4628", texture: "wood" },
+  glassyWood:  { light: "#E2C9A6", dark: "#7A4B28", texture: "woodGlass" },
+  ice:         { light: "#EEF6FF", dark: "#255CA5", texture: "ice" },
+  grass:       { light: "#E6F4E6", dark: "#0C6139", texture: "grass" },
 };
 
 const filesAll = ["a","b","c","d","e","f","g","h"];
 const ranksAll = [1,2,3,4,5,6,7,8];
+
 const fileToIndex = (f) => filesAll.indexOf(f);
 const rankToIndex = (r) => r - 1;
-const isLightSquare = (file, rank) => (fileToIndex(file) + rankToIndex(rank)) % 2 === 1; // a1 dark
+const isLightSquare = (file, rank) =>
+  (fileToIndex(file) + rankToIndex(rank)) % 2 === 1; // a1 dark
 
-/** Square board (Mode 1 only). It scales to container, no overflow. */
+/* ---------- Subtle textures (no borders on squares) ---------- */
+function textureLayers(kind, light) {
+  switch (kind) {
+    case "classicWood":
+      return {
+        backgroundImage: `
+          repeating-linear-gradient(90deg,
+            rgba(0,0,0,${light ? ".04" : ".07"}) 0 2px,
+            rgba(0,0,0,0) 2px 10px
+          ),
+          repeating-linear-gradient(0deg,
+            rgba(255,255,255,${light ? ".12" : ".06"}) 0 6px,
+            rgba(255,255,255,0) 6px 22px
+          )
+        `,
+        backgroundSize: "36px 100%, 100% 36px",
+        backgroundBlendMode: "multiply, soft-light",
+      };
+    case "wood":
+      return {
+        backgroundImage: `
+          repeating-linear-gradient(90deg,
+            rgba(0,0,0,${light ? ".025" : ".05"}) 0 2px,
+            rgba(0,0,0,0) 2px 9px
+          )
+        `,
+        backgroundBlendMode: "multiply",
+      };
+    case "woodGlass":
+      return {
+        backgroundImage: `
+          repeating-linear-gradient(90deg,
+            rgba(0,0,0,${light ? ".04" : ".075"}) 0 2px,
+            rgba(0,0,0,0) 2px 9px
+          ),
+          linear-gradient(135deg, rgba(255,255,255,${light ? ".25" : ".08"}) 0%, rgba(255,255,255,0) 60%)
+        `,
+        backgroundBlendMode: "multiply, soft-light",
+      };
+    case "ice":
+      return {
+        backgroundImage: `linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 60%)`,
+        backgroundBlendMode: "soft-light",
+      };
+    case "grass":
+      return {
+        backgroundImage: `
+          radial-gradient(rgba(0,0,0,${light ? ".02" : ".05"}) 1px, transparent 1px),
+          radial-gradient(rgba(255,255,255,${light ? ".25" : ".05"}) 1px, transparent 1px)
+        `,
+        backgroundPosition: "0 0, 2px 2px",
+        backgroundSize: "6px 6px, 6px 6px",
+        backgroundBlendMode: "multiply",
+      };
+    default:
+      return {};
+  }
+}
+function squareStyle(light, cell, themeVars) {
+  const base = light ? themeVars.light : themeVars.dark;
+  const tex  = textureLayers(themeVars.texture, light);
+  return {
+    backgroundColor: base,
+    ...tex,
+    transition: "transform 120ms ease-out",
+    willChange: "transform",
+  };
+}
+
+/* Labels: inside (phones), dark, premium */
+function coordStyle(cell) {
+  return {
+    color: "rgba(26,18,10,.95)",
+    fontVariantNumeric: "tabular-nums",
+    fontWeight: 900,
+    letterSpacing: "0.02em",
+    textShadow: "0 1px 0 rgba(255,255,255,.4), 0 2px 6px rgba(0,0,0,.12)",
+    fontSize: Math.max(12, Math.floor(cell * 0.20)),
+    lineHeight: 1,
+  };
+}
+
+/* Mesh coordinate inside the target cell (not full-screen) */
+function meshCoordStyle(cell) {
+  return {
+    color: "#3B2A1A",
+    fontWeight: 900,
+    letterSpacing: "0.01em",
+    textTransform: "lowercase",
+    textShadow: "0 2px 8px rgba(0,0,0,.15), 0 1px 0 rgba(255,255,255,.6)",
+    fontSize: Math.max(18, Math.floor(cell * 0.6)), // scaled to the cell
+    lineHeight: 1,
+    opacity: 0.9
+  };
+}
+
+/* Textured action buttons */
+function texturedButtonStyle(kind, themeVars) {
+  const light = kind === "light";
+  const base  = light ? themeVars.light : themeVars.dark;
+  const tex   = textureLayers(themeVars.texture, light);
+  return {
+    backgroundColor: base,
+    ...tex,
+    color: light ? "#111827" : "#ffffff",
+    border: light ? "2px solid rgba(0,0,0,.15)" : "2px solid rgba(0,0,0,.25)",
+    textShadow: light ? "0 1px 0 rgba(255,255,255,.5)" : "0 1px 0 rgba(0,0,0,.25)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.15), 0 6px 18px rgba(0,0,0,.14)",
+    backgroundBlendMode: "multiply, soft-light",
+  };
+}
+
+/* ---------- Board ---------- */
 function Board({
   containerRef,
   themeVars,
-  renderFullBoard,
-  n,
   viewFiles,
   viewRanks,
-  phase,
-  target,
-  lastResult,
-  restricted,
-  activeStart,
-  onSquareClick,
-  revealMode,
+  phase,          // 'idle' | 'mesh' | 'reveal'
+  target,         // {r,c} in view indices
+  lastResult,     // 'correct'|'incorrect'|null
+  restricted,     // boolean
+  activeStart,    // {file,rank} absolute 0..7
+  activeSize,     // n (3..8)
+  revealMode,     // 'square'|'2x2'|'3x3'|'board'
+  onSquareClick,  // (rowIdx,colIdx)
+  showLabels,
 }) {
-  const [boardPx, setBoardPx] = useState(320);
+  const [side, setSide] = useState(520);
+  const [phone, setPhone] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const el = containerRef.current;
     const measure = () => {
-      const labelColW = 28, gap = 8, pad = 8;
-      const availableW = Math.max(220, el.clientWidth - labelColW - gap - pad);
-      const phone = window.innerWidth < 768;
-      const topAllowance = phone ? 220 : 160;
-      const bottomAllowance = phone ? 150 : 120;
-      const availableH = Math.max(240, window.innerHeight - topAllowance - bottomAllowance);
-      setBoardPx(Math.floor(Math.min(availableW, availableH)));
+      const isPhone = window.innerWidth < 768;
+      setPhone(isPhone);
+      if (isPhone) {
+        const availableW = Math.max(260, window.innerWidth);
+        setSide(Math.floor(availableW));
+      } else {
+        const labelColW = 24;
+        const gap = 8, pad = 8;
+        const availableW = Math.max(260, el.clientWidth - labelColW - gap - pad);
+        const topAllowance = 160;
+        const bottomAllowance = 110;
+        const availableH = Math.max(300, window.innerHeight - topAllowance - bottomAllowance);
+        setSide(Math.floor(Math.min(availableW, availableH)));
+      }
       document.documentElement.style.overflowX = "hidden";
       document.body.style.overflowX = "hidden";
     };
@@ -54,19 +177,21 @@ function Board({
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
   }, [containerRef]);
 
-  const rows = renderFullBoard ? 8 : n;
-  const cols = renderFullBoard ? 8 : n;
+  const rows = viewRanks.length;
+  const cols = viewFiles.length;
+  const cell = side / Math.max(rows, cols);
+
+  const GRID_LINE = "#a1a1aa";  // visible mesh lines
+  const MESH_BG   = "#d4d4d8";  // mesh gray
 
   const inRevealPatch = useCallback((rowIdx, colIdx) => {
     if (!target) return false;
     if (revealMode === "board") return true;
     if (revealMode === "square") return rowIdx === target.r && colIdx === target.c;
     if (revealMode === "2x2") {
-      const r0 = Math.min(target.r, rows - 1);
-      const c0 = Math.min(target.c, cols - 1);
-      const r1 = Math.min(r0 + 1, rows - 1);
-      const c1 = Math.min(c0 + 1, cols - 1);
-      return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
+      const r1 = Math.min(target.r + 1, rows - 1);
+      const c1 = Math.min(target.c + 1, cols - 1);
+      return rowIdx >= target.r && rowIdx <= r1 && colIdx >= target.c && colIdx <= c1;
     }
     // 3x3
     const r0 = Math.max(0, target.r - 1);
@@ -76,166 +201,195 @@ function Board({
     return rowIdx >= r0 && rowIdx <= r1 && colIdx >= c0 && colIdx <= c1;
   }, [target, revealMode, rows, cols]);
 
+  // Absolute n×n restricted region
   const inActiveRegionAbs = useCallback(
-    (fileIdx, rankIdx) =>
-      fileIdx >= activeStart.file &&
-      fileIdx < activeStart.file + n &&
-      rankIdx >= activeStart.rank &&
-      rankIdx < activeStart.rank + n,
-    [activeStart.file, activeStart.rank, n]
+    (fileIdx, rankIdx) => {
+      if (!restricted) return true;
+      const f0 = activeStart.file;
+      const r0 = activeStart.rank;
+      const f1 = f0 + activeSize - 1;
+      const r1 = r0 + activeSize - 1;
+      return fileIdx >= f0 && fileIdx <= f1 && rankIdx >= r0 && rankIdx <= r1;
+    },
+    [restricted, activeStart.file, activeStart.rank, activeSize]
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full flex justify-center items-center">
       <div
         className="grid gap-2 max-w-full"
-        style={{ gridTemplateColumns: "auto 1fr", gridTemplateRows: "1fr auto" }}
+        style={{ gridTemplateColumns: phone ? "1fr" : "auto 1fr", gridTemplateRows: phone ? "1fr" : "1fr auto" }}
       >
-        {/* left ranks */}
-        <div
-          className="flex flex-col justify-between pr-1 select-none text-zinc-900 dark:text-zinc-100"
-          style={{ gridColumn: 1, gridRow: 1 }}
-        >
-          {viewRanks.map((r) => (
-            <div
-              key={`rank-${r}`}
-              className="flex items-center justify-center font-black"
-              style={{ height: boardPx / rows, width: 24 }}
-              aria-hidden
-            >
-              {r}
-            </div>
-          ))}
-        </div>
+        {/* Desktop left ranks */}
+        {!phone && (
+          <div
+            className="flex flex-col justify-between pr-1 select-none text-zinc-900 dark:text-zinc-100"
+            style={{ gridColumn: 1, gridRow: 1 }}
+          >
+            {viewRanks.map((r, i) => (
+              <div
+                key={`rank-${r}-${i}`}
+                className="flex items-center justify-center font-bold"
+                style={{ height: side / rows, width: 24 }}
+                aria-hidden
+              >
+                {showLabels ? r : ""}
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* square board */}
+        {/* Frame */}
         <div
-          className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden"
-          style={{ width: boardPx, height: boardPx, gridColumn: 2, gridRow: 1 }}
+          className="rounded-2xl overflow-hidden relative bg-white dark:bg-zinc-900"
+          style={{ width: side, height: side, gridColumn: phone ? "1" : "2", gridRow: 1 }}
         >
+          {/* Grid */}
           <div
             className="w-full h-full grid"
-            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
+            style={{
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              gridTemplateRows: `repeat(${rows}, 1fr)`,
+              gap: phase === "mesh" ? 1 : 0,                 // visible mesh lines
+              backgroundColor: phase === "mesh" ? GRID_LINE : "transparent",
+            }}
             role="grid"
-            aria-label="Training board"
+            aria-label="Eagle Eye board"
           >
             {Array.from({ length: rows }).map((_, rowIdx) =>
               Array.from({ length: cols }).map((__, colIdx) => {
                 const file = viewFiles[colIdx];
                 const rank = viewRanks[rowIdx];
                 const light = isLightSquare(file, rank);
-                 // absolute (0..7) indices for restrict math
-                const fileIdxAbs = fileToIndex(file);
-                const rankIdxAbs = rankToIndex(rank);
-                const inside = inActiveRegionAbs(fileIdxAbs, rankIdxAbs);
-                const isEdge =
-                restricted && inside && (
-                    fileIdxAbs === activeStart.file ||
-                    fileIdxAbs === activeStart.file + n - 1 ||
-                    rankIdxAbs === activeStart.rank ||
-                    rankIdxAbs === activeStart.rank + n - 1
-                );
 
-                // backgrounds by phase
-                let bg;
-                if (phase === "idle") {
-                  bg = light ? themeVars.light : themeVars.dark;
-                } else if (phase === "mesh") {
-                  const isTargetNow = target && target.r === rowIdx && target.c === colIdx;
-                  bg = isTargetNow ? "#9ca3af" : "#d3d3d3";
-                } else {
+                // Background by phase
+                let styleBg;
+                if (phase === "mesh") {
+                  styleBg = { backgroundColor: MESH_BG, border: "0.1px solid black"};
+                } else if (phase === "reveal") {
                   const show = inRevealPatch(rowIdx, colIdx);
-                  bg = show ? (light ? themeVars.light : themeVars.dark) : "#d3d3d3";
+                  styleBg = show ? squareStyle(light, cell, themeVars) : { backgroundColor: MESH_BG };
+                } else {
+                  styleBg = squareStyle(light, cell, themeVars);
                 }
 
-                // 1px grid (all four sides; prevent double-thick by only right/bottom at edges)
-                const cellBorder =
-                  `border-l border-t ${colIdx === cols - 1 ? "border-r " : ""}${rowIdx === rows - 1 ? "border-b " : ""}` +
-                  "border-zinc-300 dark:border-zinc-700";
+                // Dim outside restricted n×n region (no blue outline)
+                const insideRestricted = inActiveRegionAbs(fileToIndex(file), rankToIndex(rank));
 
-                // THICK 4-side outline on target during reveal
+                const isLeftEdge = colIdx === 0;
+                const isBottomEdge = rowIdx === rows - 1;
+
                 const isTargetNow = target && target.r === rowIdx && target.c === colIdx;
-                const thickOutline =
-                  phase === "reveal" && isTargetNow
-                    ? (lastResult === "correct"
-                        ? "0 0 0 6px rgba(16,185,129,.95)"  // emerald-500
-                        : "0 0 0 6px rgba(244,63,94,.95)")  // rose-500
-                    : "none";
+                const outlinePx = Math.max(4, Math.floor(cell * 0.08));
+                const outlineColor =
+                  lastResult === "correct"
+                    ? "#228B22"
+                    : "rgba(244,63,94,.95)";
 
                 return (
-                  <div
+                  <button
                     key={`${file}${rank}`}
-                    className={`relative transition-transform ${cellBorder}`}
-                    style={{ background: bg, boxShadow: thickOutline }}
+                    className="relative"
+                    style={{
+                      ...styleBg,
+                      cursor: "pointer",
+                      transform: "translateZ(0)",
+                    }}
+                    onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.985)")}
+                    onMouseUp={(e) => (e.currentTarget.style.transform = "translateZ(0)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateZ(0)")}
+                    onClick={() => onSquareClick?.(rowIdx, colIdx)}
                     role="gridcell"
                     aria-label={`${file}${rank}`}
-                    onClick={() => onSquareClick(rowIdx, colIdx)}
                   >
-                    {/* coordinate in Mode 1 during mesh */}
-                    {isTargetNow && phase === "mesh" && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span
-                          className="font-black"
-                          style={{
-                            color: "#111827", // ensure visible on grey
-                            fontSize: "min(8vw, 32px)",
-                            textShadow: "0 2px 2px rgba(255,255,255,.5)",
-                          }}
-                        >
-                          {file}{rank}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Dim everything outside restricted region */}
-                    {restricted && !inside && (
+                    {/* Dim outside restricted area */}
+                    {restricted && !insideRestricted && (
                       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
                     )}
 
-                    {/* Draw a clear ring around the active n×n region */}
-                    {isEdge && (
-                      <div className="absolute inset-0 pointer-events-none ring-2 ring-sky-500" />
+                    {/* MESH PHASE: put the coordinate INSIDE the target cell */}
+                    {phase === "mesh" && target && isTargetNow && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                        <div style={meshCoordStyle(cell)}>{`${file}${rank}`}</div>
+                      </div>
                     )}
-                  </div>
+
+                    {/* REVEAL highlight — inner outline on ALL 4 sides, even at edges */}
+                    {phase === "reveal" && isTargetNow && (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ boxShadow: `inset 0 0 0 ${outlinePx}px ${outlineColor}` }}
+                      />
+                    )}
+
+                    {/* Inside labels (phones) */}
+                    {phone && showLabels && phase !== "mesh" && (
+                      <>
+                        {isLeftEdge && (
+                          <span
+                            className="absolute select-none"
+                            style={{
+                              ...coordStyle(cell),
+                              top: Math.max(3, Math.floor(cell * 0.06)),
+                              left: Math.max(5, Math.floor(cell * 0.07)),
+                              zIndex: 1,
+                            }}
+                            aria-hidden
+                          >
+                            {rank}
+                          </span>
+                        )}
+                        {isBottomEdge && (
+                          <span
+                            className="absolute select-none"
+                            style={{
+                              ...coordStyle(cell),
+                              right: Math.max(5, Math.floor(cell * 0.07)),
+                              bottom: Math.max(3, Math.floor(cell * 0.06)),
+                              zIndex: 1,
+                              textTransform: "lowercase",
+                            }}
+                            aria-hidden
+                          >
+                            {file}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
                 );
               })
             )}
           </div>
         </div>
 
-        {/* bottom files */}
-        <div
-          className="flex gap-0 select-none text-zinc-900 dark:text-zinc-100"
-          style={{ gridColumn: "1 / span 2", gridRow: 2, width: boardPx + 24 }}
-        >
-          <div style={{ width: 24 }} aria-hidden />
-          <div className="grid w-full" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-            {viewFiles.map((f) => (
-              <div
-                key={`file-${f}`}
-                className="flex items-center justify-center font-black"
-                style={{ height: 24 }}
-                aria-hidden
-              >
-                {f}
-              </div>
-            ))}
+        {/* Desktop bottom files */}
+        {!phone && (
+          <div
+            className="flex gap-0 select-none text-zinc-900 dark:text-zinc-100"
+            style={{ gridColumn: "1 / span 2", gridRow: 2, width: side + 24 }}
+          >
+            <div style={{ width: 24 }} aria-hidden />
+            <div className="grid w-full" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+              {viewFiles.map((f) => (
+                <div key={`file-${f}`} className="flex items-center justify-center font-bold" style={{ height: 24 }} aria-hidden>
+                  {showLabels ? f : ""}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** Prompt-only stage (Mode 2). Keeps a constant square area across phases. */
+/** Prompt-only stage (Mode 2) — kept intact */
 function PromptStage({ phase, lastResult, target, viewFiles, viewRanks }) {
   return (
     <div className="w-full flex justify-center items-center">
-      {/* outer frame matches board max-width and enforces square area */}
-      <div
-        className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden grid place-items-center"
-        style={{ width: "min(90vmin, 600px)", aspectRatio: "1 / 1" }}
-      >
+      <div className="rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden grid place-items-center"
+           style={{ width: "min(90vmin, 600px)", aspectRatio: "1 / 1" }}>
         <div className="w-full max-w-sm px-4">
           <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm">
             <div className="text-center text-zinc-900 dark:text-zinc-100">
@@ -250,10 +404,8 @@ function PromptStage({ phase, lastResult, target, viewFiles, viewRanks }) {
                 </>
               )}
               {phase === "reveal" && (
-                <div
-                  className="text-sm font-semibold"
-                  style={{ color: lastResult === "correct" ? "#10b981" : "#f43f5e" }}
-                >
+                <div className="text-sm font-semibold"
+                     style={{ color: lastResult === "correct" ? "#10b981" : "#f43f5e" }}>
                   {lastResult === "correct" ? "Correct" : "Wrong"}
                 </div>
               )}
@@ -273,17 +425,21 @@ function PromptStage({ phase, lastResult, target, viewFiles, viewRanks }) {
   );
 }
 
+/* ----------------------------- Main ----------------------------- */
 export default function EagleEye() {
-  // ===== State =====
-  const [theme, setTheme] = useState("wooden");
-  const themeVars = THEMES[theme] || THEMES.green;
+  // Theme + labels
+  const [theme, setTheme] = useState("classicWood");
+  const themeVars = THEMES[theme] || THEMES.classicWood;
+  const [showLabels, setShowLabels] = useState(true);
 
+  // Modes / reveal
   const [mode, setMode] = useState(1); // 1 = board, 2 = prompt-only
   const [revealMode, setRevealMode] = useState("board"); // square | 2x2 | 3x3 | board
   const [revealMs, setRevealMs] = useState(300);
   const [repeatIncorrect, setRepeatIncorrect] = useState(true);
   const [openSheet, setOpenSheet] = useState(false);
 
+  // Timer + game state
   const [duration, setDuration] = useState(60);
   const [timeLeft, setTimeLeft] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
@@ -292,26 +448,20 @@ export default function EagleEye() {
   const [lastResult, setLastResult] = useState(null);
   const [score, setScore] = useState(0);
 
-  const [boardSize, setBoardSize] = useState(8);
+  // Board size / restriction region
+  const [boardSize, setBoardSize] = useState(8); // n
   const [restricted, setRestricted] = useState(false);
-  const [anchor, setAnchor] = useState({ file: 0, rank: 0 });
+  const [anchor, setAnchor] = useState({ file: 0, rank: 0 }); // top-left (absolute)
 
-  const activeStart = restricted ? anchor : { file: 0, rank: 0 };
   const n = Math.min(Math.max(boardSize, 3), 8);
-  const renderFullBoard = restricted || n === 8;
+  const activeStart = anchor;
+  const activeSize  = n;
 
-  const viewFiles = useMemo(() => {
-    if (renderFullBoard) return filesAll;
-    return filesAll.slice(activeStart.file, activeStart.file + n);
-  }, [renderFullBoard, activeStart.file, n]);
+  // Visible files/ranks (ranks reversed for top=8)
+  const viewFiles = useMemo(() => filesAll, []);
+  const viewRanks = useMemo(() => [...ranksAll].reverse(), []);
 
-  const viewRanks = useMemo(() => {
-    if (renderFullBoard) return [...ranksAll].reverse();
-    const slice = ranksAll.slice(activeStart.rank, activeStart.rank + n);
-    return [...slice].reverse();
-  }, [renderFullBoard, activeStart.rank, n]);
-
-  // Timer (counts down while running)
+  // Timer
   const timerRef = useRef(null);
   useEffect(() => {
     if (!isRunning) return;
@@ -331,29 +481,27 @@ export default function EagleEye() {
         return t - 1;
       });
     }, 1000);
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [isRunning, duration]);
 
-  // Target picking
+  // Pick target (respect restricted area)
   const pickRandomTarget = useCallback(() => {
-    if (renderFullBoard) {
-      const f = activeStart.file + Math.floor(Math.random() * n);
-      const r = activeStart.rank + Math.floor(Math.random() * n);
-      const fileLetter = filesAll[f];
-      const rankNum = r + 1;
-      const col = viewFiles.indexOf(fileLetter);
-      const row = viewRanks.indexOf(rankNum);
-      setTarget({ r: row, c: col });
+    let f, r;
+    if (restricted) {
+      f = activeStart.file + Math.floor(Math.random() * activeSize);
+      r = activeStart.rank + Math.floor(Math.random() * activeSize);
     } else {
-      setTarget({ r: Math.floor(Math.random() * n), c: Math.floor(Math.random() * n) });
+      f = Math.floor(Math.random() * 8);
+      r = Math.floor(Math.random() * 8);
     }
-  }, [renderFullBoard, activeStart.file, activeStart.rank, n, viewFiles, viewRanks]);
+    const fileLetter = filesAll[f];
+    const rankNum    = r + 1;
+    const col = viewFiles.indexOf(fileLetter);
+    const row = viewRanks.indexOf(rankNum);
+    setTarget({ r: row, c: col });
+  }, [restricted, activeStart.file, activeStart.rank, activeSize, viewFiles, viewRanks]);
 
+  // Start/Stop
   const startGame = useCallback(() => {
     setScore(0);
     setLastResult(null);
@@ -363,24 +511,29 @@ export default function EagleEye() {
     pickRandomTarget();
     setOpenSheet(false);
   }, [duration, pickRandomTarget]);
-
   const stopGame = useCallback(() => {
     setIsRunning(false);
     setPhase("idle");
     setTarget(null);
     setLastResult(null);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }, []);
 
+  // Re-pick target on region changes
   useEffect(() => {
     if (isRunning) pickRandomTarget();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restricted, boardSize, anchor.file, anchor.rank]);
+  }, [isRunning, restricted, activeStart.file, activeStart.rank, activeSize, pickRandomTarget]);
 
-  // Keyboard shortcuts: L/← = light, D/→ = dark. Space toggles start/stop.
+  // Clamp anchor when size changes
+  useEffect(() => {
+    setAnchor(a => {
+      const f = Math.min(Math.max(0, a.file), 8 - n);
+      const r = Math.min(Math.max(0, a.rank), 8 - n);
+      return (f === a.file && r === a.rank) ? a : { file: f, rank: r };
+    });
+  }, [n]);
+
+  // Keyboard shortcuts
   const isTypingInEditable = (el) => {
     if (!el) return false;
     const tag = el.tagName;
@@ -390,22 +543,16 @@ export default function EagleEye() {
     function onKeyDown(e) {
       if (isTypingInEditable(e.target)) return;
       const k = e.key.toLowerCase();
-
-      if (k === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        isRunning ? stopGame() : startGame();
-        return;
-      }
-
+      if (k === " " || e.key === "Spacebar") { e.preventDefault(); isRunning ? stopGame() : startGame(); return; }
       const canAnswer = isRunning && phase === "mesh" && target;
       if (canAnswer && (k === "l" || e.key === "ArrowRight")) { e.preventDefault(); submitAnswer("light"); return; }
       if (canAnswer && (k === "d" || e.key === "ArrowLeft")) { e.preventDefault(); submitAnswer("dark"); return; }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isRunning, phase, target, startGame, stopGame]); // deps include handlers/state used
+  }, [isRunning, phase, target, startGame, stopGame]);
 
-  // Answers + audio
+  // Audio (simple tones)
   const audioCtxRef = useRef(null);
   const volume = 0.75;
   function ensureAudio() {
@@ -416,7 +563,8 @@ export default function EagleEye() {
     if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
   }
   function tone(freq = 440, when = 0, dur = 0.12, type = "sine", gainBase = 0.08) {
-    const ctx = audioCtxRef.current;
+    ensureAudio();
+    const ctx = audioCtxRef.current; if (!ctx) return;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = type; osc.frequency.value = freq; osc.connect(g); g.connect(ctx.destination);
@@ -426,7 +574,6 @@ export default function EagleEye() {
     osc.start(t0); osc.stop(t1 + 0.01);
   }
   function playFeedback(correct) {
-    ensureAudio();
     const base = 0;
     if (correct) { tone(660, base + 0.00, 0.10, "sine", 0.08); tone(880, base + 0.10, 0.12, "sine", 0.08); }
     else { tone(220, base + 0.00, 0.10, "square", 0.07); tone(160, base + 0.09, 0.14, "square", 0.07); }
@@ -444,7 +591,7 @@ export default function EagleEye() {
     playFeedback(correct);
 
     setPhase("reveal");
-    const delay = Math.max(100, revealMode === "board" ? revealMs : revealMs);
+    const delay = Math.max(100, revealMs);
     setTimeout(() => {
       if (!isRunning) return;
       if (!correct && repeatIncorrect) {
@@ -457,34 +604,21 @@ export default function EagleEye() {
       }
     }, delay);
   };
-  const validAnchor = useCallback(
-    (fIdx, rIdx) => (
-      fIdx >= 0 && rIdx >= 0 && fIdx <= 8 - n && rIdx <= 8 - n
-    ),
-    [n]
-  );
-  useEffect(() => {
-    if (!restricted) return;
-    setAnchor(a => {
-      const f = Math.min(Math.max(0, a.file), 8 - n);
-      const r = Math.min(Math.max(0, a.rank), 8 - n);
-      return (f === a.file && r === a.rank) ? a : { file: f, rank: r };
-    });
-  }, [n, restricted]);
-  
-  // Square click: in this trainer we only use it for moving the restricted anchor (if you enable that later)
-   const handleSquareClick = useCallback((rowIdx, colIdx) => {
-       if (!restricted) return;
-       const fileLetter = viewFiles[colIdx];
-       const rankNum = viewRanks[rowIdx];
-       const fIdx = fileToIndex(fileLetter);
-       const rIdx = rankToIndex(rankNum);
-       if (!validAnchor(fIdx, rIdx)) return;
-       setAnchor({ file: fIdx, rank: rIdx });
-       if (isRunning) pickRandomTarget();
-     }, [restricted, viewFiles, viewRanks, isRunning, pickRandomTarget, validAnchor]);
 
-  // Controls (compact; no score/timer)
+  // Click to move restricted anchor (top-left of n×n)
+  const handleSquareClick = useCallback((rowIdx, colIdx) => {
+    if (!restricted) return;
+    const fileLetter = viewFiles[colIdx];
+    const rankNum    = viewRanks[rowIdx];
+    const fIdx = fileToIndex(fileLetter);
+    const rIdx = rankToIndex(rankNum);
+    const f = Math.min(Math.max(0, fIdx), 8 - n);
+    const r = Math.min(Math.max(0, rIdx), 8 - n);
+    setAnchor({ file: f, rank: r });
+    if (isRunning) pickRandomTarget();
+  }, [restricted, viewFiles, viewRanks, n, isRunning, pickRandomTarget]);
+
+  /* ---------- Controls ---------- */
   const ControlsPanel = (
     <div className="grid gap-4">
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm bg-white dark:bg-zinc-900">
@@ -543,13 +677,13 @@ export default function EagleEye() {
           </label>
 
           <div className="grid gap-1">
-            <span className="text-sm text-zinc-800 dark:text-zinc-100">Board Size (n×n)</span>
+            <span className="text-sm text-zinc-800 dark:text-zinc-100">Restricted size (n×n)</span>
             <div className="flex items-center gap-2">
               <button
                 className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
                 onClick={() => setBoardSize((n) => Math.max(3, n - 1))}
               >−</button>
-              <div className="w-16 text-center font-black">{boardSize}×{boardSize}</div>
+              <div className="w-20 text-center font-black">{boardSize}×{boardSize}</div>
               <button
                 className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
                 onClick={() => setBoardSize((n) => Math.min(8, n + 1))}
@@ -561,54 +695,80 @@ export default function EagleEye() {
             <input type="checkbox" checked={restricted} onChange={()=>setRestricted(v=>!v)} />
             Restricted sub-board
           </label>
+
+          <label className="inline-flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-100">
+            <input type="checkbox" checked={showLabels} onChange={()=>setShowLabels(v=>!v)} />
+            Show rank/file labels
+          </label>
         </div>
       </div>
-
-      {/* Start/Stop */}
-      {!isRunning ? (
-        <div
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-center shadow-sm bg-white dark:bg-green-900 text-zinc-900 dark:text-zinc-100 cursor-pointer"
-          onClick={startGame}
-        >
-          Start
-        </div>
-      ) : (
-        <div
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-center shadow-sm bg-white dark:bg-rose-900 text-zinc-900 dark:text-zinc-100 cursor-pointer"
-          onClick={stopGame}
-        >
-          Stop
-        </div>
-      )}
     </div>
   );
 
   // Sidebar (desktop)
   const sidebar = <div className="hidden md:block overflow-auto max-h-[70vh] pr-1">{ControlsPanel}</div>;
 
-  // Footer: ONLY answer buttons
-  const footer = (
-    <div className="w-full grid grid-cols-2 gap-3 items-center">
-      <button
-        className="h-14 rounded-xl font-black border-2 border-zinc-900 dark:border-zinc-200 text-zinc-900 dark:text-zinc-100"
-        onClick={() => submitAnswer("dark")}
-        disabled={!isRunning || phase !== "mesh" || !target}
-        style={{ background: themeVars.dark }}
-      >
-        Dark
-      </button>
-      <button
-        className="h-14 rounded-xl font-black border-2 border-zinc-900 dark:border-zinc-200 text-zinc-900 dark:text-zinc-100"
-        onClick={() => submitAnswer("light")}
-        disabled={!isRunning || phase !== "mesh" || !target}
-        style={{ background: themeVars.light }}
-      >
-        Light
-      </button>
-    </div>
-  );
+  // Footer: Dark/Light buttons (textured)
+  const Footer = () => {
+    if (isRunning){
+        return (
+            <div className="w-full grid grid-cols-2 gap-3 items-center">
+                <button
+                    className="h-16 rounded-2xl font-black shadow-sm active:scale-[.99] transition-transform"
+                    onClick={() => submitAnswer("dark")}
+                    disabled={!isRunning || phase !== "mesh" || !target}
+                    style={{
+                    ...texturedButtonStyle("dark", themeVars),
+                    opacity: (!isRunning || phase !== "mesh" || !target) ? 0.6 : 1
+                    }}
+                >
+                    Dark
+                </button>
+                <button
+                    className="h-16 rounded-2xl font-black shadow-sm active:scale-[.99] transition-transform"
+                    onClick={() => submitAnswer("light")}
+                    disabled={!isRunning || phase !== "mesh" || !target}
+                    style={{
+                    ...texturedButtonStyle("light", themeVars),
+                    opacity: (!isRunning || phase !== "mesh" || !target) ? 0.6 : 1
+                    }}
+                >
+                    Light
+                </button>
+            </div>
+        );
+    }
+    return;
+    
+  };
+//   const footer = (
+//     <div className="w-full grid grid-cols-2 gap-3 items-center">
+//       <button
+//         className="h-16 rounded-2xl font-black shadow-sm active:scale-[.99] transition-transform"
+//         onClick={() => submitAnswer("dark")}
+//         disabled={!isRunning || phase !== "mesh" || !target}
+//         style={{
+//           ...texturedButtonStyle("dark", themeVars),
+//           opacity: (!isRunning || phase !== "mesh" || !target) ? 0.6 : 1
+//         }}
+//       >
+//         Dark
+//       </button>
+//       <button
+//         className="h-16 rounded-2xl font-black shadow-sm active:scale-[.99] transition-transform"
+//         onClick={() => submitAnswer("light")}
+//         disabled={!isRunning || phase !== "mesh" || !target}
+//         style={{
+//           ...texturedButtonStyle("light", themeVars),
+//           opacity: (!isRunning || phase !== "mesh" || !target) ? 0.6 : 1
+//         }}
+//       >
+//         Light
+//       </button>
+//     </div>
+//   );
 
-  // Header: Score + Time + (mobile-only) Controls button
+  // Header: Score + Timer + Start/Stop + Controls
   const headerContent = (
     <div className="flex items-center justify-between gap-3">
       <div className="text-base md:text-lg font-semibold">
@@ -616,48 +776,85 @@ export default function EagleEye() {
         <span className="font-black text-zinc-900 dark:text-zinc-100">{score}</span>
       </div>
 
-      {/* Mobile-only Controls button */}
+      {!isRunning ? (
+        <button
+          onClick={startGame}
+          className="rounded-xl px-4 py-2 font-semibold text-white shadow-sm active:scale-[.99]"
+          style={{ backgroundColor: "#7E8F64" }}
+        >
+          Start
+        </button>
+      ) : (
+        <button
+          onClick={stopGame}
+          className="rounded-xl px-4 py-2 font-semibold text-white shadow-sm active:scale-[.99]"
+          style={{ backgroundColor: "#8B5A2B" }}
+        >
+          Stop
+        </button>
+      )}
+
       <button
-        className="md:hidden rounded-lg px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100"
+        className="md:hidden rounded-lg px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700"
         onClick={() => setOpenSheet(true)}
+        style={{ background: "#EAD6B7", color: "#3B2A1A" }}
       >
         Controls
       </button>
 
       <div className="text-base md:text-lg font-semibold">
-        <span className="text-zinc-700 dark:text-zinc-300">Time Left(s):</span>{" "}
+        <span className="text-zinc-700 dark:text-zinc-300">Timer:</span>{" "}
         <span className="font-black text-zinc-900 dark:text-zinc-100">{timeLeft}</span>
       </div>
     </div>
   );
 
-  // Stage container ref for measuring fit
   const stageContainerRef = useRef(null);
 
   return (
-    <GameLayout
-      headerContent={headerContent}  // ← make sure GameLayout uses this prop name
-      sidebar={sidebar}
-      footer={footer}
-    >
-      <div ref={stageContainerRef} className="w-full overflow-hidden">
-        {/* Mode switch: prompt REPLACES board region */}
+    <GameLayout headerContent={headerContent} sidebar={sidebar} footer={<Footer />}>
+      <div ref={stageContainerRef} className="w-full overflow-visible">
+        {/* Full-bleed on phones */}
         {mode === 1 ? (
-          <Board
-            containerRef={stageContainerRef}
-            themeVars={themeVars}
-            renderFullBoard={renderFullBoard}
-            n={n}
-            viewFiles={viewFiles}
-            viewRanks={viewRanks}
-            phase={phase}
-            target={target}
-            lastResult={lastResult}
-            restricted={restricted}
-            activeStart={activeStart}
-            onSquareClick={handleSquareClick}
-            revealMode={revealMode}
-          />
+          <>
+            <div
+              className="md:hidden"
+              style={{ width: "100vw", marginLeft: "calc(50% - 50vw)", marginRight: "calc(50% - 50vw)" }}
+            >
+              <Board
+                containerRef={stageContainerRef}
+                themeVars={themeVars}
+                viewFiles={viewFiles}
+                viewRanks={viewRanks}
+                phase={phase}
+                target={target}
+                lastResult={lastResult}
+                restricted={restricted}
+                activeStart={anchor}
+                activeSize={n}
+                revealMode={revealMode}
+                onSquareClick={handleSquareClick}
+                showLabels={showLabels}
+              />
+            </div>
+            <div className="hidden md:block">
+              <Board
+                containerRef={stageContainerRef}
+                themeVars={themeVars}
+                viewFiles={viewFiles}
+                viewRanks={viewRanks}
+                phase={phase}
+                target={target}
+                lastResult={lastResult}
+                restricted={restricted}
+                activeStart={anchor}
+                activeSize={n}
+                revealMode={revealMode}
+                onSquareClick={handleSquareClick}
+                showLabels={showLabels}
+              />
+            </div>
+          </>
         ) : (
           <PromptStage
             phase={phase}
@@ -669,7 +866,7 @@ export default function EagleEye() {
         )}
       </div>
 
-      {/* Mobile bottom sheet */}
+      {/* Mobile Controls sheet */}
       {openSheet && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpenSheet(false)} />
@@ -678,7 +875,92 @@ export default function EagleEye() {
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Controls</h3>
               <button className="px-3 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700" onClick={() => setOpenSheet(false)}>Close</button>
             </div>
-            {ControlsPanel}
+
+            {/* Gameplay */}
+            <div className="grid gap-4">
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm bg-white dark:bg-zinc-900">
+                <div className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Gameplay</div>
+                <div className="grid gap-3">
+                  <label className="grid gap-1">
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100">Mode</span>
+                    <select
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+                      value={mode}
+                      onChange={(e)=>setMode(Number(e.target.value))}
+                    >
+                      <option value={1}>Mode 1 — Board visible</option>
+                      <option value={2}>Mode 2 — Prompt only</option>
+                    </select>
+                  </label>
+
+                  <div className="grid gap-1">
+                    <label className="text-sm text-zinc-800 dark:text-zinc-100">Reveal length (ms): {revealMs}</label>
+                    <input
+                      className="w-full accent-zinc-900 dark:accent-zinc-100"
+                      type="range" min={300} max={2000} step={50}
+                      value={revealMs}
+                      onChange={(e)=>setRevealMs(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100">Reveal Mode</span>
+                    <select
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+                      value={revealMode}
+                      onChange={(e)=>setRevealMode(e.target.value)}
+                    >
+                      <option value="square">Only selected square</option>
+                      <option value="2x2">2×2 patch</option>
+                      <option value="3x3">3×3 patch</option>
+                      <option value="board">Full board</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {/* Board */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm bg-white dark:bg-zinc-900">
+                <div className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Board</div>
+                <div className="grid gap-3">
+                  <label className="grid gap-1">
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100">Theme</span>
+                    <select
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1"
+                      value={theme}
+                      onChange={(e)=>setTheme(e.target.value)}
+                    >
+                      {Object.keys(THEMES).map(k => (<option key={k} value={k}>{k}</option>))}
+                    </select>
+                  </label>
+
+                  <div className="grid gap-1">
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100">Restricted size (n×n)</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
+                        onClick={() => setBoardSize((n) => Math.max(3, n - 1))}
+                      >−</button>
+                      <div className="w-20 text-center font-black">{boardSize}×{boardSize}</div>
+                      <button
+                        className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700"
+                        onClick={() => setBoardSize((n) => Math.min(8, n + 1))}
+                      >+</button>
+                    </div>
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-100">
+                    <input type="checkbox" checked={restricted} onChange={()=>setRestricted(v=>!v)} />
+                    Restricted sub-board
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-100">
+                    <input type="checkbox" checked={showLabels} onChange={()=>setShowLabels(v=>!v)} />
+                    Show rank/file labels
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

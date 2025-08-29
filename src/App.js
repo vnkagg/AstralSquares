@@ -1,3 +1,4 @@
+
 import logo from './logo.svg';
 import './App.css';
 import EagleEye from './eagleeye';
@@ -188,7 +189,7 @@ export default function SixPanelApp() {
 
   // ===== Fullscreen Module Viewer =====
   return (
-    <div className="relative min-h-screen w-full bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+    <div className="relative min-h-[100dvh] w-full bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 ">
       {/* Overlay Drawer (does NOT push content) */}
       <div
         className={`fixed inset-0 z-50 ${sidebarOpen ? "pointer-events-auto" : "pointer-events-none"}`}
@@ -273,13 +274,15 @@ export default function SixPanelApp() {
       </div>
 
       {/* Content (disabled by overlay via pointer-events) */}
-      <div className="min-h-screen flex flex-col">
-        <div className="flex-1 overflow-auto px-4 md:px-6 py-6">
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 md:p-6 shadow-sm bg-white dark:bg-zinc-950">
-            {active?.element}
-          </div>
-        </div>
-      </div>
+  {/* Content */}
+  <div className="flex flex-col min-h-0">
+  <div className="flex-1 overflow-auto px-0 md:px-6 pt-0 md:pt-6 pb-0">
+    {active?.element}
+  </div>
+</div>
+
+
+
     </div>
   );
 }
