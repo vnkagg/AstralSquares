@@ -1,16 +1,16 @@
 {
   "files": {
-    "main.css": "/AstralSquares/static/css/main.d6f4a280.css",
-    "main.js": "/AstralSquares/static/js/main.df20e704.js",
+    "main.css": "/AstralSquares/static/css/main.24651c73.css",
+    "main.js": "/AstralSquares/static/js/main.1c6fe340.js",
     "static/js/453.e38180fe.chunk.js": "/AstralSquares/static/js/453.e38180fe.chunk.js",
     "static/media/logo.svg": "/AstralSquares/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg",
     "index.html": "/AstralSquares/index.html",
-    "main.d6f4a280.css.map": "/AstralSquares/static/css/main.d6f4a280.css.map",
-    "main.df20e704.js.map": "/AstralSquares/static/js/main.df20e704.js.map",
+    "main.24651c73.css.map": "/AstralSquares/static/css/main.24651c73.css.map",
+    "main.1c6fe340.js.map": "/AstralSquares/static/js/main.1c6fe340.js.map",
     "453.e38180fe.chunk.js.map": "/AstralSquares/static/js/453.e38180fe.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.d6f4a280.css",
-    "static/js/main.df20e704.js"
+    "static/css/main.24651c73.css",
+    "static/js/main.1c6fe340.js"
   ]
 }
