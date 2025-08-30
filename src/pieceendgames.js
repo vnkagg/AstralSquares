@@ -596,7 +596,7 @@ export default function PieceEndgames() {
       inFlight.current = controller;
       setEngineThinking(true);
 
-      const depth = engineStyle === "top" ? 18 : engineDepth;
+      const depth = engineStyle === "top" ? 12 : engineDepth;
       const fen = game.fen();
       const url = `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`;
 
